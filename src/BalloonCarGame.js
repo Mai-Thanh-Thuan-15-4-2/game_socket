@@ -1181,7 +1181,7 @@ const BalloonCarGame = () => {
       <div className="game-container">
         <div className="setup-box">
           <h1 className="title">
-            🎈 Trò Chơi Bong Bóng 🚗
+            🎈 Game 🚗
           </h1>
           
           <div style={{marginBottom: '1.5rem'}}>
@@ -1253,7 +1253,7 @@ const BalloonCarGame = () => {
       <div className="game-container">
         <div className="setup-box">
           <h1 className="title">
-            🎈 {currentRoom ? currentRoom.roomName : 'Trò Chơi Bong Bóng'} 🚗
+            🎈 {currentRoom ? currentRoom.roomName : 'Game'} 🚗
           </h1>
           
           {currentRoom && (

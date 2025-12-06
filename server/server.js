@@ -9,9 +9,14 @@ app.use(cors());
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: "http://localhost:3000",
-    methods: ["GET", "POST"]
-  }
+    origin: ["http://localhost:3000", "https://game-socket-sigma.vercel.app"],
+    methods: ["GET", "POST"],
+    credentials: true
+  },
+  transports: ['polling', 'websocket'],
+  allowEIO3: true,
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
 const PORT = process.env.PORT || 3001;
@@ -184,6 +189,17 @@ app.get('/', (req, res) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+// Health check endpoint for Vercel
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Export for Vercel serverless
+module.exports = app;
+
+// Local development
+if (require.main === module) {
+  server.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+}

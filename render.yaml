@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: game-socket-client
+    env: static
+    buildCommand: cd client && npm install && npm run build
+    staticPublishPath: ./client/build
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

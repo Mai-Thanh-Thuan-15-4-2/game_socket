@@ -8,10 +8,10 @@ const BalloonCarGame = () => {
   const miniMapRef = useRef(null);
   const socketRef = useRef(null);
   const audioRef = useRef(null); // Ref cho nhạc nền
-  const [gameState, setGameState] = useState('menu'); // menu, setup, playing, watching
+  const [gameState, setGameState] = useState('setup'); // Bỏ qua menu, vào setup luôn
   const [roomList, setRoomList] = useState([]);
   const [currentRoom, setCurrentRoom] = useState(null);
-  const [isHost, setIsHost] = useState(false);
+  const [isHost, setIsHost] = useState(true); // Offline nên luôn là host
   const [roomName, setRoomName] = useState('');
   const [username, setUsername] = useState('');
   const [players, setPlayers] = useState(['Putin', 'Donald Trump']);
@@ -67,8 +67,13 @@ const BalloonCarGame = () => {
     };
   }, []);
 
-  // Kết nối socket
+  // Kết nối socket - TẮT TẠM THỜI
   useEffect(() => {
+    // TẮT SOCKET - CHẠY OFFLINE
+    console.log('Socket disabled - running in offline mode');
+    return;
+    
+    /* COMMENT TẠM THỜI - BẬT LẠI KHI CẦN MULTIPLAYER
     const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3001';
     socketRef.current = io(SOCKET_URL);
     
@@ -164,9 +169,12 @@ const BalloonCarGame = () => {
     });
 
     return () => {
+      // TẮT SOCKET
+      /*
       if (socketRef.current) {
         socketRef.current.disconnect();
       }
+      */
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

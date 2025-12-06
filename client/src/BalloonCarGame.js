@@ -8,10 +8,14 @@ const BalloonCarGame = () => {
   const miniMapRef = useRef(null);
   const socketRef = useRef(null);
   const audioRef = useRef(null); // Ref cho nhạc nền
-  const [gameState, setGameState] = useState('menu'); // menu, setup, playing, watching
+  
+  // Kiểm tra có bật multiplayer không
+  const ENABLE_MULTIPLAYER = process.env.REACT_APP_ENABLE_MULTIPLAYER === 'true';
+  
+  const [gameState, setGameState] = useState(ENABLE_MULTIPLAYER ? 'menu' : 'setup'); // Nếu offline thì vào setup luôn
   const [roomList, setRoomList] = useState([]);
   const [currentRoom, setCurrentRoom] = useState(null);
-  const [isHost, setIsHost] = useState(false);
+  const [isHost, setIsHost] = useState(true); // Offline thì luôn là host
   const [roomName, setRoomName] = useState('');
   const [username, setUsername] = useState('');
   const [players, setPlayers] = useState(['Putin', 'Donald Trump']);
@@ -67,8 +71,13 @@ const BalloonCarGame = () => {
     };
   }, []);
 
-  // Kết nối socket
+  // Kết nối socket - CHỈ KHI BẬT MULTIPLAYER
   useEffect(() => {
+    if (!ENABLE_MULTIPLAYER) {
+      console.log('Multiplayer disabled - running in offline mode');
+      return;
+    }
+    
     const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3001';
     socketRef.current = io(SOCKET_URL);
     
@@ -164,12 +173,12 @@ const BalloonCarGame = () => {
     });
 
     return () => {
-      if (socketRef.current) {
+      if (socketRef.current && ENABLE_MULTIPLAYER) {
         socketRef.current.disconnect();
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [ENABLE_MULTIPLAYER]);
 
   useEffect(() => {
     if (gameState === 'playing' || gameState === 'watching') {
@@ -555,8 +564,8 @@ const BalloonCarGame = () => {
       }
     }
     
-    // Gửi game state cho server nếu là host
-    if (isHost && socketRef.current && currentRoom) {
+    // Gửi game state cho server nếu là host VÀ BẬT MULTIPLAYER
+    if (ENABLE_MULTIPLAYER && isHost && socketRef.current && currentRoom) {
       socketRef.current.emit('updateGameState', {
         balloons: balloons,
         car: car,

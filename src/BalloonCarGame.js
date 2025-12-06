@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, RotateCcw, Plus, Users, Eye } from 'lucide-react';
+import { Play, RotateCcw, Plus, Users, Eye, TrendingUp, TrendingUpDown } from 'lucide-react';
 import { io } from 'socket.io-client';
 import './BalloonCarGame.css';
 
@@ -1359,7 +1359,7 @@ const BalloonCarGame = () => {
             <button
               onClick={backToMenu}
               className="btn btn-gray"
-            >
+            disabled={true}>
               <RotateCcw size={20} />
               Quay lại
             </button>

@@ -428,7 +428,7 @@
 /* Player list panel in game */
 .players-panel {
   position: absolute;
-  top: 11rem;
+  top: 10rem;
   left: 1rem;
   background: rgba(0, 0, 0, 0.8);
   padding: 0.5rem;

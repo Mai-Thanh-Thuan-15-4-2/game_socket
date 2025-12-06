@@ -69,7 +69,8 @@ const BalloonCarGame = () => {
 
   // Kết nối socket
   useEffect(() => {
-    socketRef.current = io('http://localhost:3001');
+    const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3001';
+    socketRef.current = io(SOCKET_URL);
     
     socketRef.current.on('connect', () => {
       console.log('Connected to server');
@@ -1163,7 +1164,8 @@ const BalloonCarGame = () => {
   const backToMenu = () => {
     if (socketRef.current && currentRoom) {
       socketRef.current.disconnect();
-      socketRef.current = io('http://localhost:3001');
+      const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3001';
+      socketRef.current = io(SOCKET_URL);
     }
     setGameState('menu');
     setCurrentRoom(null);

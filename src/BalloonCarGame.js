@@ -41,7 +41,9 @@ const BalloonCarGame = () => {
     followCar: true,
     arenaRadius: 200,
     carTrail: [], // Quỹ đạo ảo của xe
-    audioStarted: false // Flag để theo dõi âm thanh đã bắt đầu cho lượt này chưa
+    audioStarted: false, // Flag để theo dõi âm thanh đã bắt đầu cho lượt này chưa
+    gameTimer: 0, // Đếm thời gian chơi (tính bằng frame)
+    speedBoosted: false // Flag để kiểm tra đã tăng tốc chưa
   });
 
   const BALLOON_RADIUS = 50;
@@ -292,7 +294,8 @@ const BalloonCarGame = () => {
       isReversing: false,
       reverseTimer: 0,
       reverseDistance: 0,
-      canMove: false
+      canMove: false,
+      speedMultiplier: 1 // Hệ số tốc độ (x1 hoặc x2)
     };
 
     gameRef.current.balloons = balloons;
@@ -303,6 +306,8 @@ const BalloonCarGame = () => {
     gameRef.current.followCar = true;
     gameRef.current.arenaRadius = arenaRadius; // Lưu kích thước arena cho lượt chơi này
     gameRef.current.audioStarted = false; // Reset flag âm thanh cho lượt mới
+    gameRef.current.gameTimer = 0; // Reset timer
+    gameRef.current.speedBoosted = false; // Reset speed boost flag
 
     // Đếm ngược 3-2-1 (logic countdown được xử lý trong useEffect riêng)
     setCountdown(3);
@@ -340,6 +345,16 @@ const BalloonCarGame = () => {
         gameRef.current.audioStarted = true; // Đánh dấu đã phát âm thanh cho lượt này
       }
       
+      // Tăng timer (60 fps = 1 giây sau 60 frames)
+      gameRef.current.gameTimer++;
+      
+      // Sau 30 giây (1800 frames), tăng tốc xe lên x2
+      if (gameRef.current.gameTimer >= 1800 && !gameRef.current.speedBoosted) {
+        car.speedMultiplier = 2;
+        gameRef.current.speedBoosted = true;
+        console.log('Speed boost activated! Car speed x2');
+      }
+      
       // Xe tự động chạy ngẫu nhiên
       car.changeDirectionTimer++;
       if (car.changeDirectionTimer >= car.changeDirectionInterval) {
@@ -357,12 +372,12 @@ const BalloonCarGame = () => {
         car.angle += Math.sign(angleDiff) * car.rotationSpeed;
       }
 
-      // Tự động tiến về phía trước
-      car.speed = 3;
+      // Tự động tiến về phía trước (áp dụng speedMultiplier)
+      car.speed = 3 * (car.speedMultiplier || 1);
     } else {
-      // Đang lùi - lùi xa hơn
+      // Đang lùi - lùi xa hơn (áp dụng speedMultiplier)
       car.reverseTimer++;
-      car.speed = -3;
+      car.speed = -3 * (car.speedMultiplier || 1);
       car.reverseDistance += 3;
       
       // Lùi xa hơn (100 pixels thay vì 60)
@@ -1031,6 +1046,17 @@ const BalloonCarGame = () => {
     ctx.lineTo(1, -CAR_HEIGHT / 2 - SWORD_LENGTH + 10);
     ctx.closePath();
     ctx.fill();
+
+    // Hiển thị x2 nếu đã tăng tốc
+    if (car.speedMultiplier === 2) {
+      ctx.fillStyle = '#ff0000';
+      ctx.font = 'bold 20px Arial';
+      ctx.textAlign = 'center';
+      ctx.shadowColor = '#ffffff';
+      ctx.shadowBlur = 8;
+      ctx.fillText('x2', 0, 10);
+      ctx.shadowBlur = 0;
+    }
 
     ctx.restore();
     ctx.restore();

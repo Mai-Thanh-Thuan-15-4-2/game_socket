@@ -133,9 +133,7 @@
   cursor: pointer;
   transition: all 0.3s ease;
   font-size: 0.8rem;
-} font-size: 0.95rem;
 }
-
 .btn-green {
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   color: white;
@@ -214,8 +212,7 @@
   display: flex;
   gap: 0.5rem;
   margin-bottom: 0.5rem;
-} margin-bottom: 0.75rem;
-}
+} 
 
 .text-input {
   flex: 1;
@@ -249,7 +246,6 @@
   font-size: 0.7rem;
   color: #6b7280;
   margin-top: 0.3rem;
-} margin-top: 0.75rem;
 }
 
 .room-item {
@@ -433,38 +429,38 @@
 .players-panel {
   position: absolute;
   top: 11rem;
-  right: 1rem;
+  left: 1rem;
   background: rgba(0, 0, 0, 0.8);
-  padding: 0.75rem;
-  border-radius: 0.5rem;
-  border: 2px solid white;
-  min-width: 150px;
+  padding: 0.5rem;
+  border-radius: 0.4rem;
+  border: 1.5px solid white;
+  min-width: 100px;
 }
 
 .players-panel-title {
   color: white;
-  font-size: 0.75rem;
+  font-size: 0.65rem;
   font-weight: bold;
   text-align: center;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.4rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.3);
-  padding-bottom: 0.25rem;
+  padding-bottom: 0.2rem;
 }
 
 .player-tag {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.5rem;
-  margin-bottom: 0.3rem;
+  gap: 0.35rem;
+  padding: 0.3rem 0.4rem;
+  margin-bottom: 0.25rem;
   background: rgba(255, 255, 255, 0.1);
-  border-radius: 0.25rem;
+  border-radius: 0.2rem;
   transition: all 0.2s ease;
 }
 
 .player-tag:hover {
   background: rgba(255, 255, 255, 0.2);
-  transform: translateX(-3px);
+  transform: translateX(3px);
 }
 
 .player-tag.dead {
@@ -473,16 +469,16 @@
 }
 
 .player-color-dot {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.5);
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
   flex-shrink: 0;
 }
 
 .player-tag-name {
   color: white;
-  font-size: 0.8rem;
+  font-size: 0.7rem;
   font-weight: 500;
   flex: 1;
   overflow: hidden;
@@ -492,5 +488,5 @@
 
 .player-shield-icon {
   color: #60a5fa;
-  font-size: 0.7rem;
+  font-size: 0.65rem;
 }

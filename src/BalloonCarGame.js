@@ -256,6 +256,10 @@ const BalloonCarGame = () => {
       const driftSpeed = Math.random() < 0.3 ? 0 : Math.random() * 0.5 + 0.2; // 30% không di chuyển
       const driftPattern = Math.random() * 10; // Pattern khác nhau cho mỗi bong bóng
       
+      // Tính màu dựa trên vị trí trong danh sách players gốc để đảm bảo mỗi người có màu riêng
+      const originalIndex = players.indexOf(name);
+      const hue = (360 * originalIndex) / players.length;
+      
       return {
         x: Math.cos(angle) * distance,
         y: Math.sin(angle) * distance,
@@ -264,7 +268,7 @@ const BalloonCarGame = () => {
         radius: BALLOON_RADIUS,
         name: name,
         alive: true,
-        color: `hsl(${(360 * players.indexOf(name)) / players.length}, 70%, 60%)`,
+        color: `hsl(${hue}, 70%, 60%)`,
         driftSpeed: driftSpeed,
         driftPattern: driftPattern,
         shield: true, // Khiên bảo vệ 3 giây

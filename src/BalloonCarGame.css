@@ -435,6 +435,28 @@
   border-radius: 0.4rem;
   border: 1.5px solid white;
   min-width: 100px;
+  max-height: 350px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.players-panel::-webkit-scrollbar {
+  width: 4px;
+}
+
+.players-panel::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+.players-panel::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 2px;
+}
+
+.players-panel::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.7);
 }
 
 .players-panel-title {

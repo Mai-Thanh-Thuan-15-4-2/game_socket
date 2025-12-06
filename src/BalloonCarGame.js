@@ -1093,7 +1093,7 @@ const BalloonCarGame = () => {
   };
 
   const addPlayer = () => {
-    if (newPlayer.trim() && players.length < 10) {
+    if (newPlayer.trim() && players.length < 20) {
       const name = newPlayer.trim().split(' ')[0]; // Chỉ lấy từ đầu tiên
       setPlayers([...players, name]);
       setNewPlayer('');
@@ -1101,7 +1101,7 @@ const BalloonCarGame = () => {
   };
 
   const addRandomPlayer = () => {
-    if (players.length >= 10) return;
+    if (players.length >= 20) return;
     
     const availableNames = randomNames.filter(name => !players.includes(name));
     if (availableNames.length === 0) {
@@ -1313,7 +1313,7 @@ const BalloonCarGame = () => {
               ))}
             </div>
 
-            {players.length < 10 && (
+            {players.length < 20 && (
               <div style={{display: 'flex', flexDirection: 'column', gap: '0.5rem'}}>
                 <div className="input-group">
                   <input

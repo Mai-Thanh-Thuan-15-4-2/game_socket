@@ -71,7 +71,6 @@ const BalloonCarGame = () => {
   useEffect(() => {
     // TẮT SOCKET - CHẠY OFFLINE
     console.log('Socket disabled - running in offline mode');
-    return;
     
     /* COMMENT TẠM THỜI - BẬT LẠI KHI CẦN MULTIPLAYER
     const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3001';
@@ -167,15 +166,7 @@ const BalloonCarGame = () => {
         setCurrentRoom(null);
       }
     });
-
-    return () => {
-      // TẮT SOCKET
-      /*
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-      }
-      */
-    };
+    */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

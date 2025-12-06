@@ -1356,13 +1356,13 @@ const BalloonCarGame = () => {
               {isHost ? 'Bắt Đầu Chơi' : 'Chờ Host bắt đầu'}
             </button>
             
-            <button
+            {/* <button
               onClick={backToMenu}
               className="btn btn-gray"
             disabled={true}>
               <RotateCcw size={20} />
               Quay lại
-            </button>
+            </button> */}
           </div>
 
           <div className="info-box">

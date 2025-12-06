@@ -1,38 +1,30 @@
-# Balloon Car Game
+# Balloon Car Game - Client
 
-Multiplayer balloon car racing game with real-time socket communication.
+Multiplayer balloon car racing game frontend built with React.
 
-## Structure
+## Server Repository
 
-- `/client` - React frontend
-- `/server` - Node.js + Socket.io backend
+Backend server: [game_socket_server](https://github.com/Mai-Thanh-Thuan-15-4-2/game_socket_server)
+
+## Live Demo
+
+- **Client**: https://game-socket-7fls.vercel.app
+- **Server**: https://game-socket-ekv1.vercel.app
 
 ## Local Development
 
-### Server
-```bash
-cd server
-npm install
-npm start
-```
-
-### Client
 ```bash
 cd client
 npm install
 npm start
 ```
 
-## Deploy to Vercel
-
-This project is configured for Vercel deployment with monorepo structure.
-
-1. Push code to GitHub
-2. Import project to Vercel
-3. Vercel will automatically detect the configuration
+The app will connect to `http://localhost:3001` in development, or the production server URL when deployed.
 
 ## Environment Variables
 
-For production, set:
-- Client will connect to your Vercel server URL automatically
-- Server runs on Vercel serverless functions
+- `REACT_APP_SOCKET_URL`: Socket.io server URL (default: http://localhost:3001)
+
+## Deploy to Vercel
+
+This project is configured for automatic Vercel deployment. Push to GitHub and Vercel will build and deploy automatically.

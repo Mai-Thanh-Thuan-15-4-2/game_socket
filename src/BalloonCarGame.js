@@ -1420,6 +1420,23 @@ const BalloonCarGame = () => {
         <div className="mini-map-label">Mini Map (Click để di chuyển)</div>
       </div>
 
+      {/* Players Panel */}
+      <div className="players-panel">
+        <div className="players-panel-title">👥 NGƯỜI CHƠI</div>
+        {gameRef.current.balloons && gameRef.current.balloons.map((balloon, i) => (
+          <div key={i} className={`player-tag ${!balloon.alive ? 'dead' : ''}`}>
+            <div 
+              className="player-color-dot" 
+              style={{backgroundColor: balloon.color}}
+            />
+            <div className="player-tag-name">{balloon.name}</div>
+            {balloon.shield && balloon.alive && (
+              <span className="player-shield-icon">🛡️</span>
+            )}
+          </div>
+        ))}
+      </div>
+
       {countdown !== null && (
         <div className="countdown-overlay">
           <div className="countdown-text">

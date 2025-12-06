@@ -8,6 +8,7 @@ const BalloonCarGame = () => {
   const miniMapRef = useRef(null);
   const socketRef = useRef(null);
   const audioRef = useRef(null); // Ref cho nhạc nền
+  const boomAudioRef = useRef(null); // Ref cho âm thanh boom
   const [gameState, setGameState] = useState('setup'); // Bỏ qua menu, vào setup luôn
   const [roomList, setRoomList] = useState([]);
   const [currentRoom, setCurrentRoom] = useState(null);
@@ -57,6 +58,10 @@ const BalloonCarGame = () => {
       audioRef.current = new Audio(require('./audio/music_man.mp3'));
       audioRef.current.loop = true;
       audioRef.current.volume = 0.5;
+      
+      // Khởi tạo âm thanh boom
+      boomAudioRef.current = new Audio(require('./audio/boom.mp3'));
+      boomAudioRef.current.volume = 0.7;
     } catch (err) {
       console.log('Failed to load audio:', err);
     }
@@ -65,6 +70,9 @@ const BalloonCarGame = () => {
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
+      }
+      if (boomAudioRef.current) {
+        boomAudioRef.current = null;
       }
     };
   }, []);
@@ -471,6 +479,12 @@ const BalloonCarGame = () => {
       if (dist < balloon.radius + 10 && !balloon.shield && car.canMove) {
         balloon.alive = false;
         createExplosion(balloon.x, balloon.y, balloon.color);
+        
+        // Phát âm thanh boom
+        if (boomAudioRef.current) {
+          boomAudioRef.current.currentTime = 0;
+          boomAudioRef.current.play().catch(err => console.log('Boom audio play failed:', err));
+        }
         
         // Dừng xe ngay lập tức
         car.canMove = false;

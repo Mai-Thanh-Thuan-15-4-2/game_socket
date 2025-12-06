@@ -1,5 +1,5 @@
 {
   "framework": "create-react-app",
-  "buildCommand": "cd client && npm install && npm run build",
-  "outputDirectory": "client/build"
+  "buildCommand": "cd client && npm install && npm run build && cd .. && xcopy /E /I /Y client\\build build",
+  "outputDirectory": "build"
 }

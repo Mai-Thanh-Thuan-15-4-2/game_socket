@@ -1562,7 +1562,15 @@ const BalloonCarGame = () => {
 
       {countdown !== null && (
         <div className="countdown-overlay">
-          <div className={`countdown-text ${countdown === 0 ? 'go-text' : ''}`}>
+          <div 
+            key={countdown} 
+            className={`countdown-text ${
+              countdown === 0 ? 'go-text' : 
+              countdown === 1 ? 'count-one' : 
+              countdown === 2 ? 'count-two' : 
+              countdown === 3 ? 'count-three' : ''
+            }`}
+          >
             {countdown === 0 ? 'GOO!' : countdown}
           </div>
         </div>

@@ -368,16 +368,44 @@
   color: white;
   font-size: 6rem;
   font-weight: bold;
-  animation: pulse 1s infinite;
+  animation: zoomOut 0.5s ease-out;
+}
+
+.countdown-text.count-three {
+  color: #ef4444; /* Đỏ */
+}
+
+.countdown-text.count-two {
+  color: #f59e0b; /* Cam */
+}
+
+.countdown-text.count-one {
+  color: #10b981; /* Xanh lá */
 }
 
 .countdown-text.go-text {
+  color: #3b82f6; /* Xanh dương */
   animation: zoomInOut 1s ease-out forwards;
 }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
+}
+
+@keyframes zoomOut {
+  0% {
+    transform: scale(3.5);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 @keyframes zoomInOut {

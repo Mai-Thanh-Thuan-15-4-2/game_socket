@@ -60,9 +60,7 @@ const BalloonCarGame = () => {
   // Khởi tạo audio
   useEffect(() => {
     try {
-      audioRef.current = new Audio(require('./audio/music_man.mp3'));
-      audioRef.current.loop = true;
-      audioRef.current.volume = 0.5;
+      // Audio sẽ được load random khi game bắt đầu
       
       // Khởi tạo âm thanh boom
       boomAudioRef.current = new Audio(require('./audio/boom.mp3'));
@@ -200,7 +198,15 @@ const BalloonCarGame = () => {
       // Đảm bảo audio được khởi tạo cho cả viewer
       if (!audioRef.current) {
         try {
-          audioRef.current = new Audio(require('./audio/music_man.mp3'));
+          // Random với tỉ lệ: music_man 40%, music_car 30%, rumba 30%
+          const rand = Math.random();
+          if (rand < 0.4) {
+            audioRef.current = new Audio(require('./audio/music_man.mp3'));
+          } else if (rand < 0.7) {
+            audioRef.current = new Audio(require('./audio/music_car.mp3'));
+          } else {
+            audioRef.current = new Audio(require('./audio/rumba.mp3'));
+          }
           audioRef.current.loop = true;
           audioRef.current.volume = 0.5;
         } catch (err) {
@@ -1335,6 +1341,28 @@ const BalloonCarGame = () => {
     setCountdown(null);
     setIsCarMoving(false); // Dừng timer khi chuyển lượt
     setElapsedTime(0); // Reset timer về 0 cho ván mới
+    
+    // Dừng nhạc cũ và random nhạc mới
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    
+    // Random nhạc mới với tỉ lệ: music_man 40%, music_car 30%, rumba 30%
+    try {
+      const rand = Math.random();
+      if (rand < 0.4) {
+        audioRef.current = new Audio(require('./audio/music_man.mp3'));
+      } else if (rand < 0.7) {
+        audioRef.current = new Audio(require('./audio/music_car.mp3'));
+      } else {
+        audioRef.current = new Audio(require('./audio/rumba.mp3'));
+      }
+      audioRef.current.loop = true;
+      audioRef.current.volume = 0.5;
+    } catch (err) {
+      console.log('Failed to load audio:', err);
+    }
     
     // Reset game với số bong bóng còn lại
     setTimeout(() => {

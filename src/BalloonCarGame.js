@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, RotateCcw, Plus, Users, Eye, TrendingUp, TrendingUpDown } from 'lucide-react';
+import { Play, RotateCcw, Plus, Users, Eye, LogOut } from 'lucide-react';
 import { io } from 'socket.io-client';
 import './BalloonCarGame.css';
 
@@ -15,21 +15,24 @@ const BalloonCarGame = () => {
   const [isHost, setIsHost] = useState(true); // Offline nên luôn là host
   const [roomName, setRoomName] = useState('');
   const [username, setUsername] = useState('');
-  const [players, setPlayers] = useState(['Putin', 'Donald Trump']);
+  const [players, setPlayers] = useState(['Vietnam', 'Thailand', 'Indonesia']);
   const [newPlayer, setNewPlayer] = useState('');
   const [currentTurn, setCurrentTurn] = useState(0);
   const [winner, setWinner] = useState(null);
   const [editingIndex, setEditingIndex] = useState(null);
   const [editingName, setEditingName] = useState('');
   const [countdown, setCountdown] = useState(null);
+  const [eliminatedPlayers, setEliminatedPlayers] = useState([]);
+  const [showEliminated, setShowEliminated] = useState(false);
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const [isCarMoving, setIsCarMoving] = useState(false);
 
   const randomNames = [
-    'Messi', 'Ronaldo', 'Neymar', 'Mbappé', 'Haaland',
-    'Benzema', 'Lewandowski', 'Salah', 'De Bruyne', 'Modrić',
-    'Kroos', 'Ramos', 'Van Dijk', 'Maldini', 'Beckham',
-    'Zidane', 'Ronaldinho', 'Iniesta', 'Xavi', 'Pirlo',
-    'Buffon', 'Neuer', 'Casillas', 'Rooney', 'Suárez',
-    'Griezmann', 'Kane', 'Son', 'Pogba', 'Kanté'
+    'Malaysia', 'Singapore', 'Philippines', 'Laos', 'Cambodia', 'Myanmar', 'Brunei',
+    'China', 'Japan', 'Korea', 'India', 'Pakistan',
+    'Bangladesh', 'SriLanka', 'Nepal', 'Bhutan', 'Maldives',
+    'Russia', 'USA', 'UK', 'France', 'Germany',
+    'Italy', 'Spain', 'Portugal', 'Brazil', 'Argentina', 'Australia', 'Canada', 'Mexico'
   ];
   
   const gameRef = useRef({
@@ -221,6 +224,7 @@ const BalloonCarGame = () => {
               setCountdown(null);
               if (gameRef.current.car) {
                 gameRef.current.car.canMove = true;
+                setIsCarMoving(true); // Cập nhật state
               }
               // Reset thời gian khiên về 0 để bắt đầu đếm khi xe chạy
               if (gameRef.current.balloons) {
@@ -303,7 +307,8 @@ const BalloonCarGame = () => {
       reverseTimer: 0,
       reverseDistance: 0,
       canMove: false,
-      speedMultiplier: 1 // Hệ số tốc độ (x1 hoặc x2)
+      speedMultiplier: 1, // Hệ số tốc độ (x1 hoặc x2)
+      targetBalloon: null // Bong bóng mục tiêu để lao vào sau 50s
     };
 
     gameRef.current.balloons = balloons;
@@ -363,12 +368,32 @@ const BalloonCarGame = () => {
         console.log('Speed boost activated! Car speed x2');
       }
       
-      // Xe tự động chạy ngẫu nhiên
-      car.changeDirectionTimer++;
-      if (car.changeDirectionTimer >= car.changeDirectionInterval) {
-        car.targetAngle = Math.random() * Math.PI * 2;
-        car.changeDirectionInterval = 60 + Math.random() * 120;
-        car.changeDirectionTimer = 0;
+      // Sau 50 giây (3000 frames), chọn bong bóng ngẫu nhiên và lao thẳng vào
+      if (gameRef.current.gameTimer >= 3000 && !car.targetBalloon) {
+        const aliveBalloons = balloons.filter(b => b.alive && !b.shield);
+        if (aliveBalloons.length > 0) {
+          car.targetBalloon = aliveBalloons[Math.floor(Math.random() * aliveBalloons.length)];
+          console.log('Auto-targeting balloon:', car.targetBalloon.name);
+        }
+      }
+      
+      // Nếu có bong bóng mục tiêu, lao thẳng vào
+      if (car.targetBalloon && car.targetBalloon.alive) {
+        const dx = car.targetBalloon.x - car.x;
+        const dy = car.targetBalloon.y - car.y;
+        car.targetAngle = Math.atan2(dx, -dy);
+        car.changeDirectionTimer = 0; // Reset timer để không đổi hướng ngẫu nhiên
+      } else if (car.targetBalloon) {
+        // Nếu bong bóng mục tiêu đã nổ, chọn bong bóng khác
+        car.targetBalloon = null;
+      } else {
+        // Xe tự động chạy ngẫu nhiên
+        car.changeDirectionTimer++;
+        if (car.changeDirectionTimer >= car.changeDirectionInterval) {
+          car.targetAngle = Math.random() * Math.PI * 2;
+          car.changeDirectionInterval = 60 + Math.random() * 120;
+          car.changeDirectionTimer = 0;
+        }
       }
 
       // Xoay xe về hướng mục tiêu
@@ -480,6 +505,9 @@ const BalloonCarGame = () => {
         balloon.alive = false;
         createExplosion(balloon.x, balloon.y, balloon.color);
         
+        // Thêm vào danh sách bị loại
+        setEliminatedPlayers(prev => [...prev, balloon.name]);
+        
         // Phát âm thanh boom
         if (boomAudioRef.current) {
           boomAudioRef.current.currentTime = 0;
@@ -489,6 +517,7 @@ const BalloonCarGame = () => {
         // Dừng xe ngay lập tức
         car.canMove = false;
         car.speed = 0;
+        setIsCarMoving(false); // Cập nhật state
         
         setTimeout(() => {
           nextTurn();
@@ -635,6 +664,21 @@ const BalloonCarGame = () => {
       }
     }, 3000);
   };
+
+  useEffect(() => {
+    let interval;
+    if (gameState === 'playing' && isCarMoving) {
+      interval = setInterval(() => {
+        setElapsedTime(prev => prev + 1);
+      }, 1000);
+    }
+    
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [gameState, isCarMoving]);
 
   const drawMiniMap = () => {
     const canvas = miniMapRef.current;
@@ -915,11 +959,21 @@ const BalloonCarGame = () => {
 
     // Thân xe - hình dáng xe thật với đầu nhọn
     const bodyGradient = ctx.createLinearGradient(-CAR_WIDTH / 2, 0, CAR_WIDTH / 2, 0);
-    bodyGradient.addColorStop(0, '#8e44ad'); // Tím đậm
-    bodyGradient.addColorStop(0.3, '#9b59b6'); // Tím
-    bodyGradient.addColorStop(0.5, '#e74c3c'); // Đỏ
-    bodyGradient.addColorStop(0.7, '#9b59b6'); // Tím
-    bodyGradient.addColorStop(1, '#8e44ad'); // Tím đậm
+    
+    // Kiểm tra nếu đang speed boost thì đổi màu đỏ
+    if (gameRef.current.speedBoosted) {
+      bodyGradient.addColorStop(0, '#b91c1c'); // Đỏ đậm
+      bodyGradient.addColorStop(0.3, '#dc2626'); // Đỏ
+      bodyGradient.addColorStop(0.5, '#ef4444'); // Đỏ sáng
+      bodyGradient.addColorStop(0.7, '#dc2626'); // Đỏ
+      bodyGradient.addColorStop(1, '#b91c1c'); // Đỏ đậm
+    } else {
+      bodyGradient.addColorStop(0, '#8e44ad'); // Tím đậm
+      bodyGradient.addColorStop(0.3, '#9b59b6'); // Tím
+      bodyGradient.addColorStop(0.5, '#e74c3c'); // Đỏ
+      bodyGradient.addColorStop(0.7, '#9b59b6'); // Tím
+      bodyGradient.addColorStop(1, '#8e44ad'); // Tím đậm
+    }
     
     ctx.fillStyle = bodyGradient;
     ctx.beginPath();
@@ -1009,13 +1063,7 @@ const BalloonCarGame = () => {
     ctx.arc(0, 0, 5, 0, Math.PI * 2);
     ctx.fill();
 
-    // Mũi kiếm với hiệu ứng sáng đỏ
-    // Vành sáng xung quanh kiếm
-    ctx.shadowColor = '#ef4444';
-    ctx.shadowBlur = 20;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
-    
+    // Mũi kiếm nhọn không có shadow
     const swordGradient = ctx.createLinearGradient(
       0, -CAR_HEIGHT / 2,
       0, -CAR_HEIGHT / 2 - SWORD_LENGTH
@@ -1026,28 +1074,20 @@ const BalloonCarGame = () => {
     
     ctx.strokeStyle = swordGradient;
     ctx.lineWidth = 6;
-    ctx.lineCap = 'round';
+    ctx.lineCap = 'butt'; // Đổi từ 'round' sang 'butt' để nhọn hơn
     ctx.beginPath();
     ctx.moveTo(0, -CAR_HEIGHT / 2);
-    ctx.lineTo(0, -CAR_HEIGHT / 2 - SWORD_LENGTH);
+    ctx.lineTo(0, -CAR_HEIGHT / 2 - SWORD_LENGTH + 8);
     ctx.stroke();
-    
-    // Tắt shadow
-    ctx.shadowBlur = 0;
 
-    // Lưỡi kiếm với ánh sáng đỏ
-    const tipGradient = ctx.createRadialGradient(0, -CAR_HEIGHT / 2 - SWORD_LENGTH, 0, 0, -CAR_HEIGHT / 2 - SWORD_LENGTH, 10);
-    tipGradient.addColorStop(0, '#fecaca');
-    tipGradient.addColorStop(0.5, '#ef4444');
-    tipGradient.addColorStop(1, '#dc2626');
-    
-    ctx.fillStyle = tipGradient;
-    ctx.strokeStyle = '#991b1b';
+    // Lưỡi kiếm nhọn
+    ctx.fillStyle = '#ff0404e0';
+    ctx.strokeStyle = '#820909ff';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(0, -CAR_HEIGHT / 2 - SWORD_LENGTH);
-    ctx.lineTo(-8, -CAR_HEIGHT / 2 - SWORD_LENGTH + 15);
-    ctx.lineTo(8, -CAR_HEIGHT / 2 - SWORD_LENGTH + 15);
+    ctx.moveTo(0, -CAR_HEIGHT / 2 - SWORD_LENGTH); // Mũi nhọn
+    ctx.lineTo(-6, -CAR_HEIGHT / 2 - SWORD_LENGTH + 12); // Thu hẹp để nhọn hơn
+    ctx.lineTo(6, -CAR_HEIGHT / 2 - SWORD_LENGTH + 12);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
@@ -1090,6 +1130,8 @@ const BalloonCarGame = () => {
     
     // Reset countdown về null trước khi tạo màn mới
     setCountdown(null);
+    setIsCarMoving(false); // Dừng timer khi chuyển lượt
+    setElapsedTime(0); // Reset timer về 0 cho ván mới
     
     // Reset game với số bong bóng còn lại
     setTimeout(() => {
@@ -1105,6 +1147,9 @@ const BalloonCarGame = () => {
     setGameState('playing');
     setCurrentTurn(0);
     setWinner(null);
+    setEliminatedPlayers([]); // Reset danh sách bị loại
+    setElapsedTime(0); // Reset timer
+    setIsCarMoving(false); // Reset state xe
   };
 
   const resetGame = () => {
@@ -1112,10 +1157,13 @@ const BalloonCarGame = () => {
     setCurrentTurn(0);
     setWinner(null);
     setCountdown(null);
-    setPlayers(['Putin', 'Donald Trump']); // Reset về 2 người chơi mặc định
+    setPlayers(['Vietnam', 'Thailand', 'Indonesia']); // Reset về 3 người chơi mặc định
     setNewPlayer('');
     setEditingIndex(null);
     setEditingName('');
+    setEliminatedPlayers([]); // Reset danh sách bị loại
+    setShowEliminated(false); // Đóng panel bị loại
+    setElapsedTime(0); // Reset timer
     
     // Dừng nhạc nền
     if (audioRef.current) {
@@ -1451,6 +1499,13 @@ const BalloonCarGame = () => {
         <div style={{fontSize: '0.875rem', marginTop: '0.25rem', color: '#9ca3af'}}>còn lại</div>
       </div>
 
+      {/* Timer ở giữa góc trên */}
+      <div className="hud-top-center">
+        <div style={{fontSize: '1rem', fontWeight: 'bold'}}>
+          {Math.floor(elapsedTime / 60)}:{(elapsedTime % 60).toString().padStart(2, '0')}
+        </div>
+      </div>
+
       {/* Mini Map */}
       <div className="hud-top-right">
         <canvas
@@ -1481,20 +1536,43 @@ const BalloonCarGame = () => {
         ))}
       </div>
 
+      {/* Eliminated Players Panel */}
+      <div className="eliminated-panel">
+        <button 
+          className="eliminated-toggle-btn"
+          onClick={() => setShowEliminated(!showEliminated)}
+        >
+          <span className="toggle-text">💔 ({eliminatedPlayers.length})</span>
+        </button>
+        {showEliminated && (
+          <div className="eliminated-list">
+            {eliminatedPlayers.length === 0 ? (
+              <div className="eliminated-empty">Chưa có ai bị loại</div>
+            ) : (
+              eliminatedPlayers.map((name, i) => (
+                <div key={i} className="eliminated-item">
+                  <span className="eliminated-order">#{i + 1}</span>
+                  <span className="eliminated-name">{name}</span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+
       {countdown !== null && (
         <div className="countdown-overlay">
           <div className="countdown-text">
-            {countdown === 0 ? 'BẮT ĐẦU!' : countdown}
+            {countdown === 0 ? 'GOO!' : countdown}
           </div>
         </div>
       )}
 
       <button
-        onClick={resetGame}
+        onClick={() => window.location.reload()}
         className="exit-btn"
       >
-        <RotateCcw size={20} />
-        Thoát
+        <LogOut size={20} />
       </button>
 
       {/* Nút khởi động lại xe khi bị đứng yên - chỉ hiện cho host */}
@@ -1505,6 +1583,7 @@ const BalloonCarGame = () => {
               gameRef.current.car.canMove = true;
               gameRef.current.car.speed = 3;
               setCountdown(null);
+              setIsCarMoving(true); // Cập nhật state
               // Bật khiên 3 giây để công bằng
               if (gameRef.current.balloons) {
                 gameRef.current.balloons.forEach(balloon => {
@@ -1542,8 +1621,8 @@ const BalloonCarGame = () => {
             padding: '0.75rem 1.5rem',
             borderRadius: '0.5rem',
             cursor: gameRef.current.car?.canMove === true ? 'not-allowed' : 'pointer',
-            fontSize: '1rem',
-            fontWeight: 'bold',
+            fontSize: '0.5rem',
+            // fontWeight: 'bold',
             display: 'flex',
             alignItems: 'center',
             gap: '0.5rem',
@@ -1566,7 +1645,7 @@ const BalloonCarGame = () => {
             }
           }}
         >
-          <Play size={20} />
+          <Play size={10} />
           Khởi động xe
         </button>
       )}

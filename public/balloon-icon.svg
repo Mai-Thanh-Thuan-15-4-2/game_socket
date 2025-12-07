@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Dây bong bóng -->
+  <path d="M50 75 Q45 85, 40 95" fill="none" stroke="#888" stroke-width="1.5" stroke-linecap="round"/>
+  
+  <!-- Thân bong bóng -->
+  <ellipse cx="50" cy="45" rx="28" ry="32" fill="#FF6B9D" opacity="0.9"/>
+  
+  <!-- Highlight sáng trên bong bóng -->
+  <ellipse cx="42" cy="35" rx="12" ry="16" fill="white" opacity="0.4"/>
+  <ellipse cx="38" cy="32" rx="6" ry="8" fill="white" opacity="0.6"/>
+  
+  <!-- Bóng tối dưới bong bóng -->
+  <ellipse cx="50" cy="60" rx="22" ry="8" fill="#000" opacity="0.15"/>
+  
+  <!-- Đuôi bong bóng (nơi buộc dây) -->
+  <path d="M50 75 Q48 78, 50 80 Q52 78, 50 75" fill="#FF6B9D" opacity="0.9"/>
+</svg>

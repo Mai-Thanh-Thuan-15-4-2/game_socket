@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Play, RotateCcw, Plus, Users, Eye, LogOut } from 'lucide-react';
 import { io } from 'socket.io-client';
 import './BalloonCarGame.css';
+import pigImage from './images/pig.png';
+import frogImage from './images/frog.png';
+import bearImage from './images/bear.png';
 
 const BalloonCarGame = () => {
   const canvasRef = useRef(null);
@@ -27,6 +30,7 @@ const BalloonCarGame = () => {
   const [showEliminated, setShowEliminated] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isCarMoving, setIsCarMoving] = useState(false);
+  const [cameraTarget, setCameraTarget] = useState('car'); // 'car' hoặc index của balloon
 
   const randomNames = [
     'Malaysia', 'Singapore', 'Philippines', 'Laos', 'Cambodia', 'Myanmar', 'Brunei',
@@ -49,13 +53,38 @@ const BalloonCarGame = () => {
     sparks: [], // Hạt lửa xẹt khi chạm tường
     audioStarted: false, // Flag để theo dõi âm thanh đã bắt đầu cho lượt này chưa
     gameTimer: 0, // Đếm thời gian chơi (tính bằng frame)
-    speedBoosted: false // Flag để kiểm tra đã tăng tốc chưa
+    speedBoosted: false, // Flag để kiểm tra đã tăng tốc chưa
+    animalImages: [] // Mảng chứa 3 hình ảnh động vật
   });
 
   const BALLOON_RADIUS = 50;
   const CAR_WIDTH = 50;
   const CAR_HEIGHT = 70;
   const SWORD_LENGTH = 40;
+
+  // Load 3 hình ảnh động vật
+  useEffect(() => {
+    const images = [
+      { src: pigImage, name: 'pig' },
+      { src: frogImage, name: 'frog' },
+      { src: bearImage, name: 'bear' }
+    ];
+    
+    let loadedCount = 0;
+    const loadedImages = [];
+    
+    images.forEach((imgData, index) => {
+      const img = new Image();
+      img.src = imgData.src;
+      img.onload = () => {
+        loadedImages[index] = img;
+        loadedCount++;
+        if (loadedCount === images.length) {
+          gameRef.current.animalImages = loadedImages;
+        }
+      };
+    });
+  }, []);
 
   // Khởi tạo audio
   useEffect(() => {
@@ -336,6 +365,8 @@ const BalloonCarGame = () => {
     gameRef.current.audioStarted = false; // Reset flag âm thanh cho lượt mới
     gameRef.current.gameTimer = 0; // Reset timer
     gameRef.current.speedBoosted = false; // Reset speed boost flag
+    gameRef.current.cameraTarget = 'car'; // Reset camera target về xe
+    setCameraTarget('car'); // Reset state camera target
 
     // Đếm ngược 3-2-1 (logic countdown được xử lý trong useEffect riêng)
     setCountdown(3);
@@ -460,17 +491,21 @@ const BalloonCarGame = () => {
     }
 
     // Giữ xe trong arena - kiểm tra cả mũi và đuôi xe
-    const carFrontX = car.x + Math.sin(car.angle) * CAR_HEIGHT / 2;
-    const carFrontY = car.y - Math.cos(car.angle) * CAR_HEIGHT / 2;
-    const carBackX = car.x - Math.sin(car.angle) * CAR_HEIGHT / 2;
-    const carBackY = car.y + Math.cos(car.angle) * CAR_HEIGHT / 2;
+    const isTruckCollision = balloons.filter(b => b.alive).length > 10;
+    const vHeight = isTruckCollision ? CAR_HEIGHT * 2 : CAR_HEIGHT;
+    const vWidth = isTruckCollision ? CAR_WIDTH * 2 : CAR_WIDTH;
+    
+    const carFrontX = car.x + Math.sin(car.angle) * vHeight / 2;
+    const carFrontY = car.y - Math.cos(car.angle) * vHeight / 2;
+    const carBackX = car.x - Math.sin(car.angle) * vHeight / 2;
+    const carBackY = car.y + Math.cos(car.angle) * vHeight / 2;
     
     const frontDist = Math.sqrt(carFrontX * carFrontX + carFrontY * carFrontY);
     const backDist = Math.sqrt(carBackX * carBackX + carBackY * carBackY);
     const centerDist = Math.sqrt(car.x * car.x + car.y * car.y);
     
     // Nếu bất kỳ phần nào của xe chạm tường
-    if (frontDist > arenaRadius || backDist > arenaRadius || centerDist > arenaRadius - CAR_WIDTH / 2) {
+    if (frontDist > arenaRadius || backDist > arenaRadius || centerDist > arenaRadius - vWidth / 2) {
       // Tạo hiệu ứng lửa xẹt ở điểm chạm tường
       const contactAngle = Math.atan2(car.y, car.x);
       const wallX = Math.cos(contactAngle) * arenaRadius;
@@ -496,7 +531,7 @@ const BalloonCarGame = () => {
       
       // Đẩy xe về vị trí hợp lệ
       const angle = Math.atan2(car.y, car.x);
-      const maxDist = arenaRadius - CAR_HEIGHT / 2 - 5; // Thêm margin an toàn
+      const maxDist = arenaRadius - vHeight / 2 - 5; // Thêm margin an toàn
       if (centerDist > maxDist) {
         car.x = Math.cos(angle) * maxDist;
         car.y = Math.sin(angle) * maxDist;
@@ -510,15 +545,32 @@ const BalloonCarGame = () => {
       }
     }
 
-    // Camera theo xe nếu followCar = true
+    // Camera theo xe hoặc balloon tùy theo cameraTarget
     if (gameRef.current.followCar) {
-      camera.x = car.x;
-      camera.y = car.y;
+      const target = gameRef.current.cameraTarget;
+      if (target === 'car') {
+        camera.x = car.x;
+        camera.y = car.y;
+      } else if (typeof target === 'number') {
+        // Focus vào balloon
+        const targetBalloon = balloons[target];
+        if (targetBalloon && targetBalloon.alive) {
+          camera.x = targetBalloon.x;
+          camera.y = targetBalloon.y;
+        } else {
+          // Nếu balloon chết thì quay về xe
+          camera.x = car.x;
+          camera.y = car.y;
+          gameRef.current.cameraTarget = 'car';
+        }
+      }
     }
 
-    // Vị trí mũi kiếm
-    const swordTipX = car.x + Math.sin(car.angle) * (CAR_HEIGHT / 2 + SWORD_LENGTH);
-    const swordTipY = car.y - Math.cos(car.angle) * (CAR_HEIGHT / 2 + SWORD_LENGTH);
+    // Vị trí mũi kiếm (điều chỉnh theo loại xe)
+    const isTruck = balloons.filter(b => b.alive).length > 10;
+    const vehicleHeight = isTruck ? CAR_HEIGHT * 2 : CAR_HEIGHT;
+    const swordTipX = car.x + Math.sin(car.angle) * (vehicleHeight / 2 + SWORD_LENGTH);
+    const swordTipY = car.y - Math.cos(car.angle) * (vehicleHeight / 2 + SWORD_LENGTH);
 
     // Cập nhật bong bóng
     balloons.forEach((balloon, i) => {
@@ -567,10 +619,11 @@ const BalloonCarGame = () => {
       const carDx = car.x - balloon.x;
       const carDy = car.y - balloon.y;
       const carDist = Math.sqrt(carDx * carDx + carDy * carDy);
+      const vWidthCollision = isTruckCollision ? CAR_WIDTH * 2 : CAR_WIDTH;
 
-      if (carDist < balloon.radius + CAR_WIDTH / 2) {
+      if (carDist < balloon.radius + vWidthCollision / 2) {
         const angle = Math.atan2(carDy, carDx);
-        const overlap = balloon.radius + CAR_WIDTH / 2 - carDist;
+        const overlap = balloon.radius + vWidthCollision / 2 - carDist;
         balloon.x -= Math.cos(angle) * overlap;
         balloon.y -= Math.sin(angle) * overlap;
         
@@ -851,7 +904,11 @@ const BalloonCarGame = () => {
     ctx.fillRect(0, 0, width, height);
 
     ctx.save();
-    ctx.translate(width / 2 - camera.x, height / 2 - camera.y);
+    
+    // Scale toàn bộ vùng vẽ xuống 0.75 để có phạm vi nhìn rộng hơn
+    const scale = 0.75;
+    ctx.translate(width / 2 - camera.x * scale, height / 2 - camera.y * scale);
+    ctx.scale(scale, scale);
 
     // Vẽ arena
     ctx.strokeStyle = '#ffffff';
@@ -956,7 +1013,7 @@ const BalloonCarGame = () => {
 
       // Tên
       ctx.fillStyle = '#000';
-      ctx.font = 'bold 14px Arial';
+      ctx.font = '18px Arial';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
@@ -990,6 +1047,7 @@ const BalloonCarGame = () => {
 
     // Vẽ bóng đuôi lửa phía sau xe (chỉ khi xe chạy)
     const trail = gameRef.current.carTrail;
+    const isTrailTruck = balloons.length > 10;
     if (Math.abs(car.speed) > 0.5) {
       trail.forEach((point, i) => {
         ctx.save();
@@ -998,17 +1056,34 @@ const BalloonCarGame = () => {
         ctx.translate(point.x, point.y);
         ctx.rotate(point.angle);
         
-        // Hạt bóng nhỏ như đuôi lửa
-        const particleSize = 8 + (i / trail.length) * 12;
-        const gradient = ctx.createRadialGradient(0, CAR_HEIGHT/3, 0, 0, CAR_HEIGHT/3, particleSize);
-        gradient.addColorStop(0, 'rgba(255, 140, 0, 0.8)'); // Cam sáng
-        gradient.addColorStop(0.4, 'rgba(231, 76, 60, 0.6)'); // Đỏ
-        gradient.addColorStop(1, 'rgba(231, 76, 60, 0)'); // Mờ dần
-        
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.arc(0, CAR_HEIGHT/3, particleSize, 0, Math.PI * 2);
-        ctx.fill();
+        if (isTrailTruck) {
+          // Xe tải: Hai đuôi lửa hai bên
+          for (let side of [-1, 1]) {
+            const xOffset = side * (CAR_WIDTH * 0.5); // Vị trí hai bên xe tải
+            const particleSize = 12 + (i / trail.length) * 18;
+            const gradient = ctx.createRadialGradient(xOffset, CAR_HEIGHT * 1.3, 0, xOffset, CAR_HEIGHT * 1.3, particleSize);
+            gradient.addColorStop(0, 'rgba(255, 140, 0, 0.8)'); // Cam sáng
+            gradient.addColorStop(0.4, 'rgba(231, 76, 60, 0.6)'); // Đỏ
+            gradient.addColorStop(1, 'rgba(231, 76, 60, 0)'); // Mờ dần
+            
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(xOffset, CAR_HEIGHT * 1.3, particleSize, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else {
+          // Xe cảnh sát: Một đuôi lửa giữa
+          const particleSize = 8 + (i / trail.length) * 12;
+          const gradient = ctx.createRadialGradient(0, CAR_HEIGHT/3, 0, 0, CAR_HEIGHT/3, particleSize);
+          gradient.addColorStop(0, 'rgba(255, 140, 0, 0.8)'); // Cam sáng
+          gradient.addColorStop(0.4, 'rgba(231, 76, 60, 0.6)'); // Đỏ
+          gradient.addColorStop(1, 'rgba(231, 76, 60, 0)'); // Mờ dần
+          
+          ctx.fillStyle = gradient;
+          ctx.beginPath();
+          ctx.arc(0, CAR_HEIGHT/3, particleSize, 0, Math.PI * 2);
+          ctx.fill();
+        }
         
         ctx.restore();
       });
@@ -1046,6 +1121,11 @@ const BalloonCarGame = () => {
     });
     ctx.globalAlpha = 1;
 
+    // Kiểm tra số lượng bong bóng để quyết định loại xe
+    const isTruck = balloons.length > 10;
+    const vehicleWidth = isTruck ? CAR_WIDTH * 2 : CAR_WIDTH;
+    const vehicleHeight = isTruck ? CAR_HEIGHT * 2 : CAR_HEIGHT;
+
     // Vẽ xe
     ctx.save();
     ctx.translate(car.x, car.y);
@@ -1054,9 +1134,179 @@ const BalloonCarGame = () => {
     // Bóng đổ dưới xe
     ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
     ctx.beginPath();
-    ctx.ellipse(0, CAR_HEIGHT / 2 + 5, CAR_WIDTH * 0.4, 8, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, vehicleHeight / 2 + 5, vehicleWidth * 0.4, isTruck ? 15 : 8, 0, 0, Math.PI * 2);
     ctx.fill();
 
+    if (isTruck) {
+      // VẼ XE TẢI
+      const bodyGradient = ctx.createLinearGradient(-vehicleWidth / 2, 0, vehicleWidth / 2, 0);
+      
+      // Kiểm tra nếu đang speed boost thì đổi màu đỏ
+      if (gameRef.current.speedBoosted) {
+        bodyGradient.addColorStop(0, '#7f1d1d'); // Đỏ đen
+        bodyGradient.addColorStop(0.3, '#991b1b'); // Đỏ đậm
+        bodyGradient.addColorStop(0.5, '#b91c1c'); // Đỏ
+        bodyGradient.addColorStop(0.7, '#991b1b'); // Đỏ đậm
+        bodyGradient.addColorStop(1, '#7f1d1d'); // Đỏ đen
+      } else {
+        bodyGradient.addColorStop(0, '#000000ff'); 
+        bodyGradient.addColorStop(0.3, '#1a1a1aff'); 
+        bodyGradient.addColorStop(0.5, '#080808ff');
+        bodyGradient.addColorStop(0.7, 'rgba(18, 2, 2, 1)'); 
+        bodyGradient.addColorStop(1, '#000000ff'); 
+      }
+      
+      // Thùng xe tải (phần sau) - dài hơn
+      ctx.fillStyle = bodyGradient;
+      ctx.fillRect(-vehicleWidth / 2, -vehicleHeight / 2 + 30, vehicleWidth, vehicleHeight - 35);
+      
+      // Vẽ hình động vật lên thùng xe - thay đổi mỗi 3 giây
+      if (gameRef.current.animalImages && gameRef.current.animalImages.length > 0) {
+        const cargoX = -vehicleWidth / 2;
+        const cargoY = -vehicleHeight / 2 + 30;
+        const cargoWidth = vehicleWidth;
+        const cargoHeight = vehicleHeight - 35;
+        
+        // Tính toán hình ảnh nào sẽ hiển thị (thay đổi mỗi 3 giây = 180 frames)
+        const imageIndex = Math.floor(gameRef.current.gameTimer / 180) % 3;
+        const currentImage = gameRef.current.animalImages[imageIndex];
+        
+        // Vẽ hình động vật với kích thước vừa khít thùng xe, padding 5px
+        ctx.drawImage(
+          currentImage,
+          cargoX + 5,
+          cargoY + 5,
+          cargoWidth - 10,
+          cargoHeight - 10
+        );
+      }
+      
+      // Viền thùng xe
+      ctx.strokeStyle = '#e5e7eb';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(-vehicleWidth / 2, -vehicleHeight / 2 + 30, vehicleWidth, vehicleHeight - 35);
+      
+      // Cabin xe tải (phần đầu)
+      const cabinGradient = ctx.createLinearGradient(-vehicleWidth / 2, -vehicleHeight / 2, vehicleWidth / 2, -vehicleHeight / 2);
+      if (gameRef.current.speedBoosted) {
+        cabinGradient.addColorStop(0, '#991b1b');
+        cabinGradient.addColorStop(0.5, '#dc2626');
+        cabinGradient.addColorStop(1, '#991b1b');
+      } else {
+        cabinGradient.addColorStop(0, '#991eafff');
+        cabinGradient.addColorStop(0.5, '#f63be6ff');
+        cabinGradient.addColorStop(1, '#af1e97ff');
+      }
+      ctx.fillStyle = cabinGradient;
+      ctx.beginPath();
+      ctx.moveTo(0, -vehicleHeight / 2 - 20);
+      ctx.lineTo(-vehicleWidth / 2 + 10, -vehicleHeight / 2 + 10);
+      ctx.lineTo(-vehicleWidth / 2 + 10, -vehicleHeight / 2 + 40);
+      ctx.lineTo(vehicleWidth / 2 - 10, -vehicleHeight / 2 + 40);
+      ctx.lineTo(vehicleWidth / 2 - 10, -vehicleHeight / 2 + 10);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#e5e7eb';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      
+      // Kính cabin
+      const windowGrad = ctx.createLinearGradient(0, -vehicleHeight / 2, 0, -vehicleHeight / 2 + 30);
+      windowGrad.addColorStop(0, '#34495e');
+      windowGrad.addColorStop(1, '#1a252f');
+      ctx.fillStyle = windowGrad;
+      ctx.fillRect(-vehicleWidth / 2 + 15, -vehicleHeight / 2 + 5, vehicleWidth - 30, 35);
+      
+      // 3 đèn LED trên kính cabin - cùng màu và nhấp nháy đồng bộ
+      const ledTimer = gameRef.current.gameTimer;
+      const blinkCycle = Math.floor(ledTimer / 30) % 2; // Nhấp nháy mỗi 0.5 giây
+      const colorCycle = Math.floor(ledTimer / 90) % 3; // Đổi màu mỗi 1.5 giây
+      
+      // 3 màu: Xanh lá, Xanh dương, Vàng
+      const colors = [
+        { rgb: [34, 197, 94], name: 'green' },   // Xanh lá
+        { rgb: [59, 130, 246], name: 'blue' },   // Xanh dương
+        { rgb: [234, 179, 8], name: 'yellow' }   // Vàng
+      ];
+      
+      const currentColor = colors[colorCycle];
+      const isLightOn = blinkCycle === 1;
+      
+      // Tính toán vị trí đèn dựa trên kích thước kính cabin
+      const windowWidth = vehicleWidth - 30; // Chiều rộng kính
+      const windowCenterX = 0; // Tâm kính
+      const ledSpacing = windowWidth / 4; // Khoảng cách giữa các đèn
+      const ledPositions = [
+        windowCenterX - ledSpacing,  // Trái
+        windowCenterX,                // Giữa
+        windowCenterX + ledSpacing    // Phải
+      ];
+      
+      // Đặt đèn ở giữa chiều cao kính cabin
+      const yPos = -vehicleHeight / 2 + 5 + 35 / 2;
+      const ledSize = 6; // Kích thước đồng nhất cho cả 3 đèn
+      
+      ledPositions.forEach((xPos) => {
+        if (isLightOn) {
+          // Đèn sáng - ánh sáng tỏa ra
+          const glow = ctx.createRadialGradient(xPos, yPos, 0, xPos, yPos, 18);
+          glow.addColorStop(0, `rgba(${currentColor.rgb[0]}, ${currentColor.rgb[1]}, ${currentColor.rgb[2]}, 0.9)`);
+          glow.addColorStop(0.5, `rgba(${currentColor.rgb[0]}, ${currentColor.rgb[1]}, ${currentColor.rgb[2]}, 0.5)`);
+          glow.addColorStop(1, `rgba(${currentColor.rgb[0]}, ${currentColor.rgb[1]}, ${currentColor.rgb[2]}, 0)`);
+          ctx.fillStyle = glow;
+          ctx.beginPath();
+          ctx.arc(xPos, yPos, 18, 0, Math.PI * 2);
+          ctx.fill();
+          
+          // Đèn LED sáng
+          ctx.fillStyle = `rgb(${currentColor.rgb[0]}, ${currentColor.rgb[1]}, ${currentColor.rgb[2]})`;
+          ctx.shadowColor = `rgb(${currentColor.rgb[0]}, ${currentColor.rgb[1]}, ${currentColor.rgb[2]})`;
+          ctx.shadowBlur = 12;
+          ctx.beginPath();
+          ctx.arc(xPos, yPos, ledSize, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        } else {
+          // Đèn tắt - màu xám đen tối
+          ctx.fillStyle = '#2a2a2a';
+          ctx.beginPath();
+          ctx.arc(xPos, yPos, ledSize, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
+      
+      // LED strip cho xe tải
+      const lightProgress = (gameRef.current.gameTimer * 0.1) % 1;
+      const numLights = 12;
+      
+      for (let i = 0; i < numLights; i++) {
+        const progress = (i / numLights + lightProgress) % 1;
+        const yPos = -vehicleHeight / 2 + 30 + progress * (vehicleHeight - 35);
+        const brightness = Math.sin(progress * Math.PI) * 0.8 + 0.2;
+        const isRed = Math.floor((progress + lightProgress) * numLights) % 2 === 0;
+        const colorRGB = isRed ? [239, 68, 68] : [59, 130, 246];
+        
+        for (let side of [-1, 1]) {
+          const xPos = side * vehicleWidth / 2;
+          const glow = ctx.createRadialGradient(xPos, yPos, 0, xPos, yPos, 12);
+          glow.addColorStop(0, `rgba(${colorRGB[0]}, ${colorRGB[1]}, ${colorRGB[2]}, ${brightness})`);
+          glow.addColorStop(0.5, `rgba(${colorRGB[0]}, ${colorRGB[1]}, ${colorRGB[2]}, ${brightness * 0.5})`);
+          glow.addColorStop(1, `rgba(${colorRGB[0]}, ${colorRGB[1]}, ${colorRGB[2]}, 0)`);
+          ctx.fillStyle = glow;
+          ctx.beginPath();
+          ctx.arc(xPos, yPos, 12, 0, Math.PI * 2);
+          ctx.fill();
+          
+          ctx.fillStyle = `rgba(255, 255, 255, ${brightness})`;
+          ctx.beginPath();
+          ctx.arc(xPos, yPos, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      
+    } else {
+      // VẼ XE CẢNH SÁT (code gốc)
+    
     // Thân xe - hình dáng xe thật với đầu nhọn
     const bodyGradient = ctx.createLinearGradient(-CAR_WIDTH / 2, 0, CAR_WIDTH / 2, 0);
     
@@ -1257,32 +1507,36 @@ const BalloonCarGame = () => {
       ctx.fill();
       ctx.shadowBlur = 0;
     }
+    
+    } // Kết thúc phần vẽ xe cảnh sát
 
-    // Mũi kiếm nhọn không có shadow
+    // Mũi kiếm nhọn không có shadow (áp dụng cho cả 2 loại xe)
+    const swordYStart = isTruck ? -vehicleHeight / 2 : -CAR_HEIGHT / 2;
     const swordGradient = ctx.createLinearGradient(
-      0, -CAR_HEIGHT / 2,
-      0, -CAR_HEIGHT / 2 - SWORD_LENGTH
+      0, swordYStart,
+      0, swordYStart - SWORD_LENGTH
     );
     swordGradient.addColorStop(0, '#dc2626');
     swordGradient.addColorStop(0.5, '#ef4444');
     swordGradient.addColorStop(1, '#f87171');
     
     ctx.strokeStyle = swordGradient;
-    ctx.lineWidth = 6;
-    ctx.lineCap = 'butt'; // Đổi từ 'round' sang 'butt' để nhọn hơn
+    ctx.lineWidth = isTruck ? 10 : 6;
+    ctx.lineCap = 'butt';
     ctx.beginPath();
-    ctx.moveTo(0, -CAR_HEIGHT / 2);
-    ctx.lineTo(0, -CAR_HEIGHT / 2 - SWORD_LENGTH + 8);
+    ctx.moveTo(0, swordYStart);
+    ctx.lineTo(0, swordYStart - SWORD_LENGTH + 8);
     ctx.stroke();
 
     // Lưỡi kiếm nhọn
     ctx.fillStyle = '#ff0404e0';
     ctx.strokeStyle = '#820909ff';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = isTruck ? 3 : 2;
     ctx.beginPath();
-    ctx.moveTo(0, -CAR_HEIGHT / 2 - SWORD_LENGTH); // Mũi nhọn
-    ctx.lineTo(-6, -CAR_HEIGHT / 2 - SWORD_LENGTH + 12); // Thu hẹp để nhọn hơn
-    ctx.lineTo(6, -CAR_HEIGHT / 2 - SWORD_LENGTH + 12);
+    const bladeWidth = isTruck ? 10 : 6;
+    ctx.moveTo(0, swordYStart - SWORD_LENGTH);
+    ctx.lineTo(-bladeWidth, swordYStart - SWORD_LENGTH + 12);
+    ctx.lineTo(bladeWidth, swordYStart - SWORD_LENGTH + 12);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
@@ -1837,9 +2091,32 @@ const BalloonCarGame = () => {
 
       {/* Players Panel */}
       <div className="players-panel">
-        <div className="players-panel-title">👥 NGƯỜI CHƠI</div>
+        <div className="players-panel-header">
+          <div className="players-panel-title">👥 NGƯỜI CHƠI</div>
+          <button 
+            className="focus-car-btn"
+            onClick={() => {
+              setCameraTarget('car');
+              gameRef.current.cameraTarget = 'car';
+            }}
+            title="Focus về xe"
+          >
+            🚗
+          </button>
+        </div>
         {gameRef.current.balloons && gameRef.current.balloons.map((balloon, i) => (
-          <div key={i} className={`player-tag ${!balloon.alive ? 'dead' : ''}`}>
+          <div 
+            key={i} 
+            className={`player-tag ${!balloon.alive ? 'dead' : ''} ${cameraTarget === i ? 'focused' : ''}`}
+            onClick={() => {
+              if (balloon.alive) {
+                setCameraTarget(i);
+                gameRef.current.cameraTarget = i;
+              }
+            }}
+            style={{cursor: balloon.alive ? 'pointer' : 'default'}}
+            title={balloon.alive ? 'Click để xem bong bóng này' : ''}
+          >
             <div 
               className="player-color-dot" 
               style={{backgroundColor: balloon.color}}

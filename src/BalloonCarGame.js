@@ -9,6 +9,7 @@ const BalloonCarGame = () => {
   const socketRef = useRef(null);
   const audioRef = useRef(null); // Ref cho nhạc nền
   const boomAudioRef = useRef(null); // Ref cho âm thanh boom
+  const endAudioRef = useRef(null); // Ref cho âm thanh chiến thắng
   const [gameState, setGameState] = useState('setup'); // Bỏ qua menu, vào setup luôn
   const [roomList, setRoomList] = useState([]);
   const [currentRoom, setCurrentRoom] = useState(null);
@@ -45,6 +46,7 @@ const BalloonCarGame = () => {
     followCar: true,
     arenaRadius: 200,
     carTrail: [], // Quỹ đạo ảo của xe
+    sparks: [], // Hạt lửa xẹt khi chạm tường
     audioStarted: false, // Flag để theo dõi âm thanh đã bắt đầu cho lượt này chưa
     gameTimer: 0, // Đếm thời gian chơi (tính bằng frame)
     speedBoosted: false // Flag để kiểm tra đã tăng tốc chưa
@@ -64,7 +66,11 @@ const BalloonCarGame = () => {
       
       // Khởi tạo âm thanh boom
       boomAudioRef.current = new Audio(require('./audio/boom.mp3'));
-      boomAudioRef.current.volume = 0.7;
+      boomAudioRef.current.volume = 1.0;
+      
+      // Khởi tạo âm thanh chiến thắng
+      endAudioRef.current = new Audio(require('./audio/end.mp3'));
+      endAudioRef.current.volume = 0.8;
     } catch (err) {
       console.log('Failed to load audio:', err);
     }
@@ -76,6 +82,9 @@ const BalloonCarGame = () => {
       }
       if (boomAudioRef.current) {
         boomAudioRef.current = null;
+      }
+      if (endAudioRef.current) {
+        endAudioRef.current = null;
       }
     };
   }, []);
@@ -456,6 +465,29 @@ const BalloonCarGame = () => {
     
     // Nếu bất kỳ phần nào của xe chạm tường
     if (frontDist > arenaRadius || backDist > arenaRadius || centerDist > arenaRadius - CAR_WIDTH / 2) {
+      // Tạo hiệu ứng lửa xẹt ở điểm chạm tường
+      const contactAngle = Math.atan2(car.y, car.x);
+      const wallX = Math.cos(contactAngle) * arenaRadius;
+      const wallY = Math.sin(contactAngle) * arenaRadius;
+      
+      // Tạo 5-8 hạt lửa mỗi frame
+      if (Math.random() < 0.7) {
+        const sparkCount = Math.floor(Math.random() * 4) + 5;
+        for (let i = 0; i < sparkCount; i++) {
+          const sparkAngle = contactAngle + Math.PI + (Math.random() - 0.5) * Math.PI / 2;
+          const speed = Math.random() * 3 + 2;
+          gameRef.current.sparks.push({
+            x: wallX + (Math.random() - 0.5) * 30,
+            y: wallY + (Math.random() - 0.5) * 30,
+            vx: Math.cos(sparkAngle) * speed,
+            vy: Math.sin(sparkAngle) * speed,
+            life: 1.0,
+            size: Math.random() * 3 + 2,
+            color: Math.random() > 0.5 ? '#ff6b00' : '#ffff00'
+          });
+        }
+      }
+      
       // Đẩy xe về vị trí hợp lệ
       const angle = Math.atan2(car.y, car.x);
       const maxDist = arenaRadius - CAR_HEIGHT / 2 - 5; // Thêm margin an toàn
@@ -604,6 +636,20 @@ const BalloonCarGame = () => {
       
       if (p.life <= 0 || p.alpha <= 0) {
         particles.splice(i, 1);
+      }
+    }
+    
+    // Cập nhật sparks (hạt lửa xẹt)
+    for (let i = gameRef.current.sparks.length - 1; i >= 0; i--) {
+      const spark = gameRef.current.sparks[i];
+      spark.x += spark.vx;
+      spark.y += spark.vy;
+      spark.vy += 0.2; // Trọng lực
+      spark.life -= 0.02;
+      spark.size *= 0.96;
+      
+      if (spark.life <= 0) {
+        gameRef.current.sparks.splice(i, 1);
       }
     }
     
@@ -761,6 +807,32 @@ const BalloonCarGame = () => {
         life: 60
       });
     }
+  };
+  
+  // Helper function to convert HSL to RGB
+  const hslToRgb = (h, s, l) => {
+    let r, g, b;
+    
+    if (s === 0) {
+      r = g = b = l;
+    } else {
+      const hue2rgb = (p, q, t) => {
+        if (t < 0) t += 1;
+        if (t > 1) t -= 1;
+        if (t < 1/6) return p + (q - p) * 6 * t;
+        if (t < 1/2) return q;
+        if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+        return p;
+      };
+      
+      const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+      const p = 2 * l - q;
+      r = hue2rgb(p, q, h + 1/3);
+      g = hue2rgb(p, q, h);
+      b = hue2rgb(p, q, h - 1/3);
+    }
+    
+    return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
   };
 
   const draw = (ctx, width, height, arenaRadius) => {
@@ -945,6 +1017,28 @@ const BalloonCarGame = () => {
       ctx.fill();
     });
     ctx.globalAlpha = 1;
+    
+    // Vẽ sparks (hiệu ứng lửa xẹt khi chạm tường)
+    gameRef.current.sparks.forEach(spark => {
+      ctx.globalAlpha = spark.life;
+      
+      // Ánh sáng phát ra
+      const sparkGlow = ctx.createRadialGradient(spark.x, spark.y, 0, spark.x, spark.y, spark.size * 3);
+      sparkGlow.addColorStop(0, spark.color);
+      sparkGlow.addColorStop(0.5, spark.color + '80');
+      sparkGlow.addColorStop(1, spark.color + '00');
+      ctx.fillStyle = sparkGlow;
+      ctx.beginPath();
+      ctx.arc(spark.x, spark.y, spark.size * 3, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Hạt lửa
+      ctx.fillStyle = spark.color;
+      ctx.beginPath();
+      ctx.arc(spark.x, spark.y, spark.size, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
 
     // Vẽ xe
     ctx.save();
@@ -962,17 +1056,17 @@ const BalloonCarGame = () => {
     
     // Kiểm tra nếu đang speed boost thì đổi màu đỏ
     if (gameRef.current.speedBoosted) {
-      bodyGradient.addColorStop(0, '#b91c1c'); // Đỏ đậm
-      bodyGradient.addColorStop(0.3, '#dc2626'); // Đỏ
-      bodyGradient.addColorStop(0.5, '#ef4444'); // Đỏ sáng
-      bodyGradient.addColorStop(0.7, '#dc2626'); // Đỏ
-      bodyGradient.addColorStop(1, '#b91c1c'); // Đỏ đậm
+      bodyGradient.addColorStop(0, '#7f1d1d'); // Đỏ đen
+      bodyGradient.addColorStop(0.3, '#991b1b'); // Đỏ đậm
+      bodyGradient.addColorStop(0.5, '#b91c1c'); // Đỏ
+      bodyGradient.addColorStop(0.7, '#991b1b'); // Đỏ đậm
+      bodyGradient.addColorStop(1, '#7f1d1d'); // Đỏ đen
     } else {
-      bodyGradient.addColorStop(0, '#8e44ad'); // Tím đậm
-      bodyGradient.addColorStop(0.3, '#9b59b6'); // Tím
-      bodyGradient.addColorStop(0.5, '#e74c3c'); // Đỏ
-      bodyGradient.addColorStop(0.7, '#9b59b6'); // Tím
-      bodyGradient.addColorStop(1, '#8e44ad'); // Tím đậm
+      bodyGradient.addColorStop(0, '#0a0a0a'); // Đen
+      bodyGradient.addColorStop(0.3, '#1a1a1a'); // Đen nhạt
+      bodyGradient.addColorStop(0.5, '#2d2d2d'); // Xám đen
+      bodyGradient.addColorStop(0.7, '#1a1a1a'); // Đen nhạt
+      bodyGradient.addColorStop(1, '#0a0a0a'); // Đen
     }
     
     ctx.fillStyle = bodyGradient;
@@ -989,23 +1083,71 @@ const BalloonCarGame = () => {
     ctx.closePath();
     ctx.fill();
     
-    // Viền vàng kim loại
-    ctx.strokeStyle = '#f39c12';
+    // Viền bạc kim loại
+    ctx.strokeStyle = '#e5e7eb';
     ctx.lineWidth = 2.5;
     ctx.stroke();
     
-    // Đèn pha trước (2 bên đầu xe)
-    const lightGradient = ctx.createRadialGradient(-10, -CAR_HEIGHT / 2 + 5, 0, -10, -CAR_HEIGHT / 2 + 5, 8);
-    lightGradient.addColorStop(0, '#fff');
-    lightGradient.addColorStop(0.5, '#f1c40f');
-    lightGradient.addColorStop(1, '#f39c12');
-    ctx.fillStyle = lightGradient;
-    ctx.beginPath();
-    ctx.arc(-10, -CAR_HEIGHT / 2 + 5, 6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(10, -CAR_HEIGHT / 2 + 5, 6, 0, Math.PI * 2);
-    ctx.fill();
+    // Hiệu ứng ánh sáng chạy dọc hai bên viền xe (LED strip effect)
+    const lightProgress = (gameRef.current.gameTimer * 0.1) % 1; // Tốc độ chạy
+    const numLights = 8; // Số điểm sáng
+    
+    for (let i = 0; i < numLights; i++) {
+      const progress = (i / numLights + lightProgress) % 1;
+      const yPos = -CAR_HEIGHT / 2 + progress * CAR_HEIGHT;
+      
+      // Độ sáng giảm dần theo vị trí
+      const brightness = Math.sin(progress * Math.PI) * 0.8 + 0.2;
+      
+      // Luân phiên giữa đỏ và xanh dương
+      const isRed = Math.floor((progress + lightProgress) * numLights) % 2 === 0;
+      const colorRGB = isRed ? [239, 68, 68] : [59, 130, 246]; // Đỏ hoặc xanh dương
+      
+      // Ánh sáng bên trái
+      const leftGlow = ctx.createRadialGradient(-CAR_WIDTH / 2, yPos, 0, -CAR_WIDTH / 2, yPos, 8);
+      leftGlow.addColorStop(0, `rgba(${colorRGB[0]}, ${colorRGB[1]}, ${colorRGB[2]}, ${brightness})`);
+      leftGlow.addColorStop(0.5, `rgba(${colorRGB[0]}, ${colorRGB[1]}, ${colorRGB[2]}, ${brightness * 0.5})`);
+      leftGlow.addColorStop(1, `rgba(${colorRGB[0]}, ${colorRGB[1]}, ${colorRGB[2]}, 0)`);
+      ctx.fillStyle = leftGlow;
+      ctx.beginPath();
+      ctx.arc(-CAR_WIDTH / 2, yPos, 8, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Điểm sáng bên trái
+      ctx.fillStyle = `rgba(255, 255, 255, ${brightness})`;
+      ctx.beginPath();
+      ctx.arc(-CAR_WIDTH / 2, yPos, 2, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Ánh sáng bên phải
+      const rightGlow = ctx.createRadialGradient(CAR_WIDTH / 2, yPos, 0, CAR_WIDTH / 2, yPos, 8);
+      rightGlow.addColorStop(0, `rgba(${colorRGB[0]}, ${colorRGB[1]}, ${colorRGB[2]}, ${brightness})`);
+      rightGlow.addColorStop(0.5, `rgba(${colorRGB[0]}, ${colorRGB[1]}, ${colorRGB[2]}, ${brightness * 0.5})`);
+      rightGlow.addColorStop(1, `rgba(${colorRGB[0]}, ${colorRGB[1]}, ${colorRGB[2]}, 0)`);
+      ctx.fillStyle = rightGlow;
+      ctx.beginPath();
+      ctx.arc(CAR_WIDTH / 2, yPos, 8, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Điểm sáng bên phải
+      ctx.fillStyle = `rgba(255, 255, 255, ${brightness})`;
+      ctx.beginPath();
+      ctx.arc(CAR_WIDTH / 2, yPos, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    
+    // // Đèn pha trước (2 bên đầu xe)
+    // const lightGradient = ctx.createRadialGradient(-10, -CAR_HEIGHT / 2 + 5, 0, -10, -CAR_HEIGHT / 2 + 5, 8);
+    // lightGradient.addColorStop(0, '#fff');
+    // lightGradient.addColorStop(0.5, '#f1c40f');
+    // lightGradient.addColorStop(1, '#f39c12');
+    // ctx.fillStyle = lightGradient;
+    // ctx.beginPath();
+    // ctx.arc(-10, -CAR_HEIGHT / 2 + 5, 6, 0, Math.PI * 2);
+    // ctx.fill();
+    // ctx.beginPath();
+    // ctx.arc(10, -CAR_HEIGHT / 2 + 5, 6, 0, Math.PI * 2);
+    // ctx.fill();
     
     // Ánh sáng đèn
     ctx.fillStyle = 'rgba(255, 255, 200, 0.3)';
@@ -1062,6 +1204,53 @@ const BalloonCarGame = () => {
     ctx.beginPath();
     ctx.arc(0, 0, 5, 0, Math.PI * 2);
     ctx.fill();
+    
+    // Đèn nhấp nháy cảnh sát trên đầu xe (giống xe cảnh sát)
+    const blinkPhase = Math.floor(gameRef.current.gameTimer / 10) % 2; // Nhấp nháy mỗi 10 frame
+    
+    // Đèn trái (xanh dương)
+    if (blinkPhase === 0) {
+      // Ánh sáng xanh dương
+      const blueGlow = ctx.createRadialGradient(-12, -20, 0, -12, -20, 15);
+      blueGlow.addColorStop(0, 'rgba(59, 130, 246, 0.8)');
+      blueGlow.addColorStop(0.5, 'rgba(59, 130, 246, 0.4)');
+      blueGlow.addColorStop(1, 'rgba(59, 130, 246, 0)');
+      ctx.fillStyle = blueGlow;
+      ctx.beginPath();
+      ctx.arc(-12, -20, 15, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Đèn xanh dương
+      ctx.fillStyle = '#3b82f6';
+      ctx.shadowColor = '#3b82f6';
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.arc(-12, -20, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+    
+    // Đèn phải (đỏ)
+    if (blinkPhase === 1) {
+      // Ánh sáng đỏ
+      const redGlow = ctx.createRadialGradient(12, -20, 0, 12, -20, 15);
+      redGlow.addColorStop(0, 'rgba(239, 68, 68, 0.8)');
+      redGlow.addColorStop(0.5, 'rgba(239, 68, 68, 0.4)');
+      redGlow.addColorStop(1, 'rgba(239, 68, 68, 0)');
+      ctx.fillStyle = redGlow;
+      ctx.beginPath();
+      ctx.arc(12, -20, 15, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Đèn đỏ
+      ctx.fillStyle = '#ef4444';
+      ctx.shadowColor = '#ef4444';
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.arc(12, -20, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
 
     // Mũi kiếm nhọn không có shadow
     const swordGradient = ctx.createLinearGradient(
@@ -1122,6 +1311,20 @@ const BalloonCarGame = () => {
     if (aliveBalloons.length === 1) {
       setWinner(aliveBalloons[0].name);
       setGameState('ended');
+      
+      // Dừng tất cả âm thanh khác và phát âm thanh chiến thắng
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+      if (boomAudioRef.current) {
+        boomAudioRef.current.pause();
+        boomAudioRef.current.currentTime = 0;
+      }
+      if (endAudioRef.current) {
+        endAudioRef.current.currentTime = 0;
+        endAudioRef.current.play().catch(err => console.log('End audio play failed:', err));
+      }
       return;
     }
 
@@ -1171,6 +1374,12 @@ const BalloonCarGame = () => {
       audioRef.current.currentTime = 0;
     }
     
+    // Dừng nhạc end
+    if (endAudioRef.current) {
+      endAudioRef.current.pause();
+      endAudioRef.current.currentTime = 0;
+    }
+    
     // Reset gameRef
     gameRef.current = {
       balloons: [],
@@ -1180,7 +1389,12 @@ const BalloonCarGame = () => {
       camera: { x: 0, y: 0 },
       particles: [],
       followCar: true,
-      arenaRadius: 200
+      arenaRadius: 200,
+      carTrail: [],
+      sparks: [],
+      audioStarted: false,
+      gameTimer: 0,
+      speedBoosted: false
     };
   };
 
@@ -1203,6 +1417,22 @@ const BalloonCarGame = () => {
     
     const randomName = availableNames[Math.floor(Math.random() * availableNames.length)];
     setPlayers([...players, randomName]);
+  };
+
+  const addMaxPlayers = () => {
+    const availableNames = randomNames.filter(name => !players.includes(name));
+    const numToAdd = Math.min(20 - players.length, availableNames.length);
+    
+    if (numToAdd === 0) {
+      alert('Đã đủ 20 người chơi hoặc hết tên!');
+      return;
+    }
+    
+    // Shuffle và lấy ngẫu nhiên
+    const shuffled = [...availableNames].sort(() => Math.random() - 0.5);
+    const newPlayers = shuffled.slice(0, numToAdd);
+    
+    setPlayers([...players, ...newPlayers]);
   };
 
   const removePlayer = (index) => {
@@ -1423,12 +1653,22 @@ const BalloonCarGame = () => {
                     Thêm
                   </button>
                 </div>
-                <button
-                  onClick={addRandomPlayer}
-                  className="btn btn-purple"
-                >
-                  🎲 Thêm Tên Ngẫu Nhiên
-                </button>
+                <div style={{display: 'flex', gap: '0.5rem'}}>
+                  <button
+                    onClick={addRandomPlayer}
+                    className="btn btn-purple"
+                    style={{flex: 1}}
+                  >
+                    🎲 Thêm Tên Ngẫu Nhiên
+                  </button>
+                  <button
+                    onClick={addMaxPlayers}
+                    className="btn btn-orange"
+                    style={{flex: 1}}
+                  >
+                    🚀 Tối Đa (20)
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -1465,11 +1705,59 @@ const BalloonCarGame = () => {
   }
 
   if (gameState === 'ended') {
+    // Tính toán rankings (eliminatedPlayers được thêm theo thứ tự bị loại)
+    // Người bị loại sau cùng = hạng 3, trước đó = hạng 2, người chiến thắng = hạng 1
+    const rankings = [];
+    rankings.push({ place: 1, name: winner, medal: '🥇', color: '#FFD700' }); // Vàng
+    
+    if (eliminatedPlayers.length >= 1) {
+      rankings.push({ 
+        place: 2, 
+        name: eliminatedPlayers[eliminatedPlayers.length - 1], 
+        medal: '🥈', 
+        color: '#C0C0C0' 
+      }); // Bạc
+    }
+    
+    if (eliminatedPlayers.length >= 2) {
+      rankings.push({ 
+        place: 3, 
+        name: eliminatedPlayers[eliminatedPlayers.length - 2], 
+        medal: '🥉', 
+        color: '#CD7F32' 
+      }); // Đồng
+    }
+    
     return (
       <div className="end-container">
+        {/* Fireworks effect */}
+        <div className="fireworks">
+          <div className="firework"></div>
+          <div className="firework"></div>
+          <div className="firework"></div>
+          <div className="firework"></div>
+          <div className="firework"></div>
+        </div>
+        
         <div className="end-box">
-          <h1 className="winner-title">🎉 Chiến Thắng! 🎉</h1>
-          <p className="winner-name">{winner}</p>
+          <h1 className="winner-title">🎉 KẾT QUẢ TRẬN ĐẤU 🎉</h1>
+          
+          <div className="podium-container">
+            {rankings.map((rank, index) => (
+              <div 
+                key={rank.place} 
+                className={`podium-card podium-${rank.place}`}
+                style={{ animationDelay: `${index * 0.3}s` }}
+              >
+                <div className="medal">{rank.medal}</div>
+                <div className="place-number" style={{ color: rank.color }}>
+                  #{rank.place}
+                </div>
+                <div className="player-name-podium">{rank.name}</div>
+              </div>
+            ))}
+          </div>
+          
           <button
             onClick={resetGame}
             className="btn-replay"

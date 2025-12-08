@@ -13,6 +13,7 @@ const BalloonCarGame = () => {
   const audioRef = useRef(null); // Ref cho nhạc nền
   const boomAudioRef = useRef(null); // Ref cho âm thanh boom
   const endAudioRef = useRef(null); // Ref cho âm thanh chiến thắng
+  const laserAudioRef = useRef(null); // Ref cho âm thanh tên lửa
   const [gameState, setGameState] = useState('setup'); // Bỏ qua menu, vào setup luôn
   const [roomList, setRoomList] = useState([]);
   const [currentRoom, setCurrentRoom] = useState(null);
@@ -31,6 +32,7 @@ const BalloonCarGame = () => {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isCarMoving, setIsCarMoving] = useState(false);
   const [cameraTarget, setCameraTarget] = useState('car'); // 'car' hoặc index của balloon
+  const [continuousRocketMode, setContinuousRocketMode] = useState(false); // Chế độ bắn tên lửa liên tục
 
   const randomNames = [
     'Malaysia', 'Singapore', 'Philippines', 'Laos', 'Cambodia', 'Myanmar', 'Brunei',
@@ -54,7 +56,10 @@ const BalloonCarGame = () => {
     audioStarted: false, // Flag để theo dõi âm thanh đã bắt đầu cho lượt này chưa
     gameTimer: 0, // Đếm thời gian chơi (tính bằng frame)
     speedBoosted: false, // Flag để kiểm tra đã tăng tốc chưa
-    animalImages: [] // Mảng chứa 3 hình ảnh động vật
+    animalImages: [], // Mảng chứa 3 hình ảnh động vật
+    rocket: null, // Tên lửa bắn ra từ mũi kiếm
+    rocketLaunched: false, // Flag kiểm tra đã bắn tên lửa chưa
+    swordVisible: true // Hiển thị thanh đao (tắt khi bắn rocket)
   });
 
   const BALLOON_RADIUS = 50;
@@ -98,6 +103,10 @@ const BalloonCarGame = () => {
       // Khởi tạo âm thanh chiến thắng
       endAudioRef.current = new Audio(require('./audio/end.mp3'));
       endAudioRef.current.volume = 0.8;
+      
+      // Khởi tạo âm thanh tên lửa
+      laserAudioRef.current = new Audio(require('./audio/laser.mp3'));
+      laserAudioRef.current.volume = 0.6;
     } catch (err) {
       console.log('Failed to load audio:', err);
     }
@@ -113,8 +122,125 @@ const BalloonCarGame = () => {
       if (endAudioRef.current) {
         endAudioRef.current = null;
       }
+      if (laserAudioRef.current) {
+        laserAudioRef.current = null;
+      }
     };
   }, []);
+
+  // Xử lý keyboard events
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.code === 'Space' && gameState === 'playing' && !gameRef.current.rocketLaunched) {
+        event.preventDefault();
+        
+        const { car, balloons } = gameRef.current;
+        if (!car || !balloons) return;
+        
+        // Tìm bong bóng gần nhất hoặc ngẫu nhiên
+        const aliveBalloons = balloons.filter(b => b.alive && !b.shield);
+        if (aliveBalloons.length === 0) return;
+        
+        const targetBalloon = aliveBalloons[Math.floor(Math.random() * aliveBalloons.length)];
+        
+        // Tính vị trí mũi kiếm trước để dùng cho waypoint calculation
+        const isTruckForCalc = balloons.filter(b => b.alive).length > 10;
+        const vehicleHeightForCalc = isTruckForCalc ? CAR_HEIGHT * 2 : CAR_HEIGHT;
+        const swordTipX = car.x + Math.sin(car.angle) * (vehicleHeightForCalc / 2 + SWORD_LENGTH);
+        const swordTipY = car.y - Math.cos(car.angle) * (vehicleHeightForCalc / 2 + SWORD_LENGTH);
+        
+        // Tạo waypoints thông minh - chọn bong bóng ở phía đối diện để tạo vòng cung dài nhất
+        // Tính góc từ vị trí hiện tại đến mục tiêu
+        const targetAngle = Math.atan2(targetBalloon.y - swordTipY, targetBalloon.x - swordTipX);
+        
+        // Lọc các bong bóng khác và tính góc lệch
+        const waypoints = [];
+        const availableForWaypoints = aliveBalloons.filter(b => b !== targetBalloon);
+        
+        // Tính điểm cho mỗi bong bóng dựa trên khoảng cách và góc lệch
+        const scoredBalloons = availableForWaypoints.map(balloon => {
+          const balloonAngle = Math.atan2(balloon.y - swordTipY, balloon.x - swordTipX);
+          let angleDiff = Math.abs(targetAngle - balloonAngle);
+          
+          // Chuẩn hóa góc lệch
+          if (angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
+          
+          const distance = Math.sqrt(
+            Math.pow(balloon.x - swordTipX, 2) + 
+            Math.pow(balloon.y - swordTipY, 2)
+          );
+          
+          // ƪu tiên bong bóng ở góc lệch lớn (90-180 độ) và xa
+          const angleScore = angleDiff / Math.PI; // 0-1, cao hơn = góc lệch lớn hơn
+          const distanceScore = distance / 1000; // Chuẩn hóa khoảng cách
+          
+          return {
+            balloon,
+            score: angleScore * 0.7 + distanceScore * 0.3, // Ưu tiên góc lệch
+            angle: balloonAngle,
+            distance
+          };
+        });
+        
+        // Sắp xếp theo điểm và chọn 2-3 waypoints tốt nhất
+        scoredBalloons.sort((a, b) => b.score - a.score);
+        const numWaypoints = Math.min(2 + Math.floor(Math.random() * 2), scoredBalloons.length);
+        
+        for (let i = 0; i < numWaypoints; i++) {
+          waypoints.push({
+            x: scoredBalloons[i].balloon.x, 
+            y: scoredBalloons[i].balloon.y
+          });
+        }
+        
+        console.log('Calculated waypoints with max arc distance:', waypoints.length);
+        
+        // Dừng xe lại
+        car.speed = 0;
+        car.canMove = false;
+        
+        // Sử dụng lại swordTipX, swordTipY đã tính ở trên
+        gameRef.current.rocket = {
+          x: swordTipX,
+          y: swordTipY,
+          targetX: targetBalloon.x,
+          targetY: targetBalloon.y,
+          waypoints: waypoints, // Danh sách điểm qua
+          currentWaypointIndex: 0, // Đang bay đến waypoint nào
+          speed: 10, // Tăng tốc độ
+          angle: car.angle, // Bắn thẳng theo hướng xe
+          initialAngle: car.angle, // Lưu hướng xe ban đầu
+          trail: [],
+          phase: 'launch', // 'launch', 'loop', 'arc', hoặc 'homing'
+          launchDistance: 0, // Khoảng cách bay thẳng
+          maxLaunchDistance: 150, // Bay thẳng 150px rồi mới vòng
+          loopAngle: 0, // Góc đã quay trong vòng loop
+          loopRadius: 60, // Bán kính vòng loop
+          loopCenter: null, // Tâm vòng loop
+          loopSpeed: 0.12, // Tốc độ quay vòng (rad/frame)
+          arcCurvature: 0.08 // Độ cong của quỹ đạo
+        };
+        
+        gameRef.current.rocketLaunched = true;
+        gameRef.current.swordVisible = false; // Ẩn thanh đao khi bắn tên lửa
+        
+        // Phát âm thanh tên lửa
+        if (laserAudioRef.current) {
+          laserAudioRef.current.currentTime = 0;
+          laserAudioRef.current.play().catch(err => console.log('Laser audio play failed:', err));
+        }
+        
+        console.log('Manual rocket launched at balloon:', targetBalloon.name);
+        console.log('Rocket created:', gameRef.current.rocket);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [gameState]);
 
   // Kết nối socket - TẮT TẠM THỜI
   useEffect(() => {
@@ -352,7 +478,6 @@ const BalloonCarGame = () => {
       reverseDistance: 0,
       canMove: false,
       speedMultiplier: 1, // Hệ số tốc độ (x1 hoặc x2)
-      targetBalloon: null // Bong bóng mục tiêu để lao vào sau 50s
     };
 
     gameRef.current.balloons = balloons;
@@ -366,6 +491,9 @@ const BalloonCarGame = () => {
     gameRef.current.gameTimer = 0; // Reset timer
     gameRef.current.speedBoosted = false; // Reset speed boost flag
     gameRef.current.cameraTarget = 'car'; // Reset camera target về xe
+    gameRef.current.rocket = null; // Reset tên lửa
+    gameRef.current.rocketLaunched = false; // Reset flag bắn tên lửa
+    gameRef.current.swordVisible = true; // Phục hồi thanh đao
     setCameraTarget('car'); // Reset state camera target
 
     // Đếm ngược 3-2-1 (logic countdown được xử lý trong useEffect riêng)
@@ -394,9 +522,216 @@ const BalloonCarGame = () => {
     }
 
     // Chỉ chạy khi được phép di chuyển (chỉ áp dụng cho host)
+    
+    // Cập nhật tên lửa nếu đã bắn (luôn chạy bất kể trạng thái xe)
+    if (gameRef.current.rocket) {
+      const rocket = gameRef.current.rocket;
+      
+      // Kiểm tra va chạm với bong bóng trong tất cả các phase
+      let hitBalloon = false;
+      balloons.forEach((balloon, index) => {
+        if (balloon.alive) {
+          const bdx = balloon.x - rocket.x;
+          const bdy = balloon.y - rocket.y;
+          const bDistance = Math.sqrt(bdx * bdx + bdy * bdy);
+          
+          if (bDistance < balloon.radius + 25) {
+            hitBalloon = true;
+            balloon.alive = false;
+            createExplosion(balloon.x, balloon.y, balloon.color);
+            setEliminatedPlayers(prev => [...prev, balloon.name]);
+            
+            if (boomAudioRef.current) {
+              boomAudioRef.current.currentTime = 0;
+              boomAudioRef.current.play().catch(err => console.log('Boom audio play failed:', err));
+            }
+            
+            console.log('Rocket hit balloon:', balloon.name);
+          }
+        }
+      });
+      
+      if (hitBalloon) {
+        // Nổ tên lửa khi chạm bong bóng
+        gameRef.current.explosionLocation = {x: rocket.x, y: rocket.y};
+        createExplosion(rocket.x, rocket.y, '#ff4444');
+        gameRef.current.rocket = null;
+        gameRef.current.rocketLaunched = false;
+        
+        // Nếu ở chế độ continuous, cho phép bắn tiếp và phục hồi thanh đao
+        if (continuousRocketMode) {
+          setTimeout(() => {
+            gameRef.current.explosionLocation = null;
+            gameRef.current.swordVisible = true; // Phục hồi thanh đao
+          }, 1000);
+          console.log('Rocket exploded, ready for next launch (continuous mode)');
+        } else {
+          // Chế độ bình thường - qua ván mới
+          setTimeout(() => {
+            gameRef.current.explosionLocation = null;
+            nextTurn();
+          }, 2000);
+          console.log('Rocket exploded on collision, checking game end');
+        }
+      } else {
+        // Di chuyển tên lửa theo phase
+        if (rocket.phase === 'launch') {
+          // Phase 1: Bắn thẳng theo hướng xe
+          rocket.x += Math.sin(rocket.angle) * rocket.speed;
+          rocket.y -= Math.cos(rocket.angle) * rocket.speed;
+          rocket.launchDistance += rocket.speed;
+          
+          // Chuyển sang phase loop sau khi bay đủ khoảng cách
+          if (rocket.launchDistance >= rocket.maxLaunchDistance) {
+            // Tính tâm vòng loop - ở bên phải hướng bay (vuông góc với hướng xe)
+            // Sử dụng hệ tọa độ xe: sin(angle) cho x, -cos(angle) cho y
+            const perpAngle = rocket.angle + Math.PI / 2;
+            rocket.loopCenter = {
+              x: rocket.x + Math.sin(perpAngle) * rocket.loopRadius,
+              y: rocket.y - Math.cos(perpAngle) * rocket.loopRadius
+            };
+            // Lưu góc bắt đầu loop (từ tâm đến vị trí hiện tại)
+            rocket.loopStartAngle = Math.atan2(
+              rocket.x - rocket.loopCenter.x,
+              -(rocket.y - rocket.loopCenter.y)
+            );
+            rocket.loopAngle = 0;
+            rocket.phase = 'loop';
+            console.log('Rocket switching to loop mode, center:', rocket.loopCenter);
+          }
+        } else if (rocket.phase === 'loop') {
+          // Phase 2: Bay vòng tròn (looping)
+          rocket.loopAngle += rocket.loopSpeed;
+          
+          // Tính vị trí trên vòng tròn - giữ nguyên startAngle
+          const currentAngle = rocket.loopStartAngle + rocket.loopAngle;
+          
+          // Chuyển từ góc về tọa độ (sử dụng hệ tọa độ xe)
+          rocket.x = rocket.loopCenter.x + Math.sin(currentAngle) * rocket.loopRadius;
+          rocket.y = rocket.loopCenter.y - Math.cos(currentAngle) * rocket.loopRadius;
+          
+          // Cập nhật góc rocket để luôn tiếp tuyến với vòng tròn
+          // Trong hệ tọa độ xe, tiếp tuyến = góc vị trí + 90° (PI/2)
+          rocket.angle = currentAngle + Math.PI / 2;
+          
+          // Hoàn thành vòng loop (360 độ)
+          if (rocket.loopAngle >= Math.PI * 2) {
+            rocket.phase = 'arc';
+            console.log('Rocket completed loop, switching to arc mode');
+          }
+        } else if (rocket.phase === 'arc') {
+          // Phase 2: Bay vòng cung qua các waypoints
+          let targetX, targetY;
+          
+          if (rocket.waypoints && rocket.currentWaypointIndex < rocket.waypoints.length) {
+            // Bay đến waypoint hiện tại
+            const currentWaypoint = rocket.waypoints[rocket.currentWaypointIndex];
+            targetX = currentWaypoint.x;
+            targetY = currentWaypoint.y;
+          } else {
+            // Hết waypoints, bay đến mục tiêu cuối
+            targetX = rocket.targetX;
+            targetY = rocket.targetY;
+          }
+          
+          const dx = targetX - rocket.x;
+          const dy = targetY - rocket.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          
+          // Kiểm tra đến waypoint hoặc mục tiêu
+          if (distance <= 30) {
+            if (rocket.waypoints && rocket.currentWaypointIndex < rocket.waypoints.length) {
+              // Chuyển sang waypoint tiếp theo
+              rocket.currentWaypointIndex++;
+              console.log('Reached waypoint, moving to next:', rocket.currentWaypointIndex);
+            } else {
+              // Đến mục tiêu cuối, chuyển sang homing
+              rocket.phase = 'homing';
+              console.log('Reached final target area, switching to homing');
+            }
+          } else {
+            // Bay theo quỹ đạo vòng cung với hệ tọa độ xe
+            // Tính góc mục tiêu theo hệ tọa độ xe
+            const targetAngle = Math.atan2(dx, -dy);
+            let angleDiff = targetAngle - rocket.angle;
+            
+            // Chuẩn hóa góc
+            while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+            while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+            
+            // Xoay dần theo quỹ đạo vòng cung
+            rocket.angle += Math.sign(angleDiff) * rocket.arcCurvature;
+            
+            // Di chuyển theo hướng hiện tại (hệ tọa độ xe)
+            rocket.x += Math.sin(rocket.angle) * rocket.speed;
+            rocket.y -= Math.cos(rocket.angle) * rocket.speed;
+          }
+        } else if (rocket.phase === 'homing') {
+          // Phase 3: Homing về mục tiêu cuối cùng
+          const dx = rocket.targetX - rocket.x;
+          const dy = rocket.targetY - rocket.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          
+          if (distance <= 5) {
+            // Đến mục tiêu, nổ
+            gameRef.current.explosionLocation = {x: rocket.x, y: rocket.y};
+            createExplosion(rocket.x, rocket.y, '#ff4444');
+            gameRef.current.rocket = null;
+            gameRef.current.rocketLaunched = false;
+            
+            if (continuousRocketMode) {
+              setTimeout(() => {
+                gameRef.current.explosionLocation = null;
+                gameRef.current.swordVisible = true;
+              }, 1000);
+              console.log('Rocket reached final target (continuous mode)');
+            } else {
+              setTimeout(() => {
+                gameRef.current.explosionLocation = null;
+                nextTurn();
+              }, 2000);
+              console.log('Rocket reached final target, exploding');
+            }
+          } else {
+            // Tiếp tục bay vòng cung về mục tiêu (hệ tọa độ xe)
+            const targetAngle = Math.atan2(dx, -dy);
+            let angleDiff = targetAngle - rocket.angle;
+            
+            while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+            while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+            
+            rocket.angle += Math.sign(angleDiff) * rocket.arcCurvature;
+            
+            rocket.x += Math.sin(rocket.angle) * rocket.speed;
+            rocket.y -= Math.cos(rocket.angle) * rocket.speed;
+          }
+        }
+      }
+      
+      // Cập nhật trail
+      rocket.trail.push({x: rocket.x, y: rocket.y});
+      if (rocket.trail.length > 50) {
+        rocket.trail.shift();
+      }
+    }
+    
     if (!car.canMove) {
       car.speed = 0;
-    } else if (!car.isReversing) {
+    } else if (car.isReversing) {
+      // Đang lùi - lùi xa hơn (áp dụng speedMultiplier)
+      car.reverseTimer++;
+      car.speed = -3 * (car.speedMultiplier || 1);
+      car.reverseDistance += 3;
+      
+      // Lùi xa hơn (100 pixels thay vì 60)
+      if (car.reverseDistance >= 100) {
+        car.isReversing = false;
+        car.reverseTimer = 0;
+        car.reverseDistance = 0;
+        // Chọn hướng ngẫu nhiên hoàn toàn mới
+        car.targetAngle = Math.random() * Math.PI * 2;
+      }
+    } else {
       // Reset và phát nhạc khi xe bắt đầu chạy lần đầu trong lượt này
       if (audioRef.current && !gameRef.current.audioStarted) {
         audioRef.current.currentTime = 0;
@@ -414,26 +749,96 @@ const BalloonCarGame = () => {
         console.log('Speed boost activated! Car speed x2');
       }
       
-      // Sau 50 giây (3000 frames), chọn bong bóng ngẫu nhiên và lao thẳng vào
-      if (gameRef.current.gameTimer >= 3000 && !car.targetBalloon) {
+      // Sau 50 giây (3000 frames), dừng xe và bắn tên lửa vào bong bóng ngẫu nhiên
+      if (gameRef.current.gameTimer >= 3000 && !gameRef.current.rocketLaunched) {
         const aliveBalloons = balloons.filter(b => b.alive && !b.shield);
         if (aliveBalloons.length > 0) {
-          car.targetBalloon = aliveBalloons[Math.floor(Math.random() * aliveBalloons.length)];
-          console.log('Auto-targeting balloon:', car.targetBalloon.name);
+          const targetBalloon = aliveBalloons[Math.floor(Math.random() * aliveBalloons.length)];
+          
+          // Tạo waypoints thông minh - chọn bong bóng tạo vòng cung dài nhất
+          const isTruck = balloons.filter(b => b.alive).length > 10;
+          const vehicleHeight = isTruck ? CAR_HEIGHT * 2 : CAR_HEIGHT;
+          const swordTipX = car.x + Math.sin(car.angle) * (vehicleHeight / 2 + SWORD_LENGTH);
+          const swordTipY = car.y - Math.cos(car.angle) * (vehicleHeight / 2 + SWORD_LENGTH);
+          
+          const targetAngle = Math.atan2(targetBalloon.y - swordTipY, targetBalloon.x - swordTipX);
+          
+          const waypoints = [];
+          const availableForWaypoints = aliveBalloons.filter(b => b !== targetBalloon);
+          
+          const scoredBalloons = availableForWaypoints.map(balloon => {
+            const balloonAngle = Math.atan2(balloon.y - swordTipY, balloon.x - swordTipX);
+            let angleDiff = Math.abs(targetAngle - balloonAngle);
+            
+            if (angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
+            
+            const distance = Math.sqrt(
+              Math.pow(balloon.x - swordTipX, 2) + 
+              Math.pow(balloon.y - swordTipY, 2)
+            );
+            
+            const angleScore = angleDiff / Math.PI;
+            const distanceScore = distance / 1000;
+            
+            return {
+              balloon,
+              score: angleScore * 0.7 + distanceScore * 0.3,
+              angle: balloonAngle,
+              distance
+            };
+          });
+          
+          scoredBalloons.sort((a, b) => b.score - a.score);
+          const numWaypoints = Math.min(2 + Math.floor(Math.random() * 2), scoredBalloons.length);
+          
+          for (let i = 0; i < numWaypoints; i++) {
+            waypoints.push({
+              x: scoredBalloons[i].balloon.x, 
+              y: scoredBalloons[i].balloon.y
+            });
+          }
+          
+          // Dừng xe lại
+          car.speed = 0;
+          car.canMove = false;
+          
+          // Sử dụng lại swordTipX, swordTipY đã tính ở trên
+          gameRef.current.rocket = {
+            x: swordTipX,
+            y: swordTipY,
+            targetX: targetBalloon.x,
+            targetY: targetBalloon.y,
+            waypoints: waypoints,
+            currentWaypointIndex: 0,
+            speed: 10,
+            angle: car.angle,
+            initialAngle: car.angle,
+            trail: [],
+            phase: 'launch',
+            launchDistance: 0,
+            maxLaunchDistance: 150,
+            loopAngle: 0,
+            loopRadius: 60,
+            loopCenter: null,
+            loopSpeed: 0.12,
+            arcCurvature: 0.08
+          };
+          
+          gameRef.current.rocketLaunched = true;
+          gameRef.current.swordVisible = false; // Ẩn thanh đao
+          
+          // Phát âm thanh tên lửa
+          if (laserAudioRef.current) {
+            laserAudioRef.current.currentTime = 0;
+            laserAudioRef.current.play().catch(err => console.log('Laser audio play failed:', err));
+          }
+          
+          console.log('Rocket launched at balloon:', targetBalloon.name);
         }
       }
-      
-      // Nếu có bong bóng mục tiêu, lao thẳng vào
-      if (car.targetBalloon && car.targetBalloon.alive) {
-        const dx = car.targetBalloon.x - car.x;
-        const dy = car.targetBalloon.y - car.y;
-        car.targetAngle = Math.atan2(dx, -dy);
-        car.changeDirectionTimer = 0; // Reset timer để không đổi hướng ngẫu nhiên
-      } else if (car.targetBalloon) {
-        // Nếu bong bóng mục tiêu đã nổ, chọn bong bóng khác
-        car.targetBalloon = null;
-      } else {
-        // Xe tự động chạy ngẫu nhiên
+
+      // Xe tự động chạy ngẫu nhiên (chỉ khi không có tên lửa và xe được phép di chuyển)
+      if (!gameRef.current.rocket && car.canMove) {
         car.changeDirectionTimer++;
         if (car.changeDirectionTimer >= car.changeDirectionInterval) {
           car.targetAngle = Math.random() * Math.PI * 2;
@@ -451,21 +856,11 @@ const BalloonCarGame = () => {
         car.angle += Math.sign(angleDiff) * car.rotationSpeed;
       }
 
-      // Tự động tiến về phía trước (áp dụng speedMultiplier)
-      car.speed = 3 * (car.speedMultiplier || 1);
-    } else {
-      // Đang lùi - lùi xa hơn (áp dụng speedMultiplier)
-      car.reverseTimer++;
-      car.speed = -3 * (car.speedMultiplier || 1);
-      car.reverseDistance += 3;
-      
-      // Lùi xa hơn (100 pixels thay vì 60)
-      if (car.reverseDistance >= 100) {
-        car.isReversing = false;
-        car.reverseTimer = 0;
-        car.reverseDistance = 0;
-        // Chọn hướng ngẫu nhiên hoàn toàn mới
-        car.targetAngle = Math.random() * Math.PI * 2;
+      // Tự động tiến về phía trước (áp dụng speedMultiplier) - chỉ khi không có tên lửa
+      if (!gameRef.current.rocket) {
+        car.speed = 3 * (car.speedMultiplier || 1);
+      } else {
+        car.speed = 0; // Dừng xe khi có tên lửa
       }
     }
 
@@ -545,23 +940,33 @@ const BalloonCarGame = () => {
       }
     }
 
-    // Camera theo xe hoặc balloon tùy theo cameraTarget
+    // Camera theo xe, balloon hoặc tên lửa tùy theo cameraTarget
     if (gameRef.current.followCar) {
-      const target = gameRef.current.cameraTarget;
-      if (target === 'car') {
-        camera.x = car.x;
-        camera.y = car.y;
-      } else if (typeof target === 'number') {
-        // Focus vào balloon
-        const targetBalloon = balloons[target];
-        if (targetBalloon && targetBalloon.alive) {
-          camera.x = targetBalloon.x;
-          camera.y = targetBalloon.y;
-        } else {
-          // Nếu balloon chết thì quay về xe
+      // Ưu tiên focus vị trí nổ nếu vừa nổ xong
+      if (gameRef.current.explosionLocation) {
+        camera.x = gameRef.current.explosionLocation.x;
+        camera.y = gameRef.current.explosionLocation.y;
+      } else if (gameRef.current.rocket) {
+        // Focus tên lửa nếu đang có tên lửa bay
+        camera.x = gameRef.current.rocket.x;
+        camera.y = gameRef.current.rocket.y;
+      } else {
+        const target = gameRef.current.cameraTarget;
+        if (target === 'car') {
           camera.x = car.x;
           camera.y = car.y;
-          gameRef.current.cameraTarget = 'car';
+        } else if (typeof target === 'number') {
+          // Focus vào balloon
+          const targetBalloon = balloons[target];
+          if (targetBalloon && targetBalloon.alive) {
+            camera.x = targetBalloon.x;
+            camera.y = targetBalloon.y;
+          } else {
+            // Nếu balloon chết thì quay về xe
+            camera.x = car.x;
+            camera.y = car.y;
+            gameRef.current.cameraTarget = 'car';
+          }
         }
       }
     }
@@ -1089,6 +1494,104 @@ const BalloonCarGame = () => {
       });
     }
 
+    // Vẽ tên lửa nếu có
+    if (gameRef.current.rocket) {
+      const rocket = gameRef.current.rocket;
+      
+      // Vẽ trail của tên lửa với gradient
+      if (rocket.trail.length > 1) {
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        
+        for (let i = 1; i < rocket.trail.length; i++) {
+          const alpha = i / rocket.trail.length;
+          const size = alpha * 5;
+          
+          ctx.strokeStyle = `rgba(255, 107, 53, ${alpha * 0.8})`;
+          ctx.lineWidth = size;
+          ctx.beginPath();
+          ctx.moveTo(rocket.trail[i - 1].x, rocket.trail[i - 1].y);
+          ctx.lineTo(rocket.trail[i].x, rocket.trail[i].y);
+          ctx.stroke();
+          
+          // Hiệu ứng lửa đuôi
+          if (i < 8) {
+            ctx.strokeStyle = `rgba(255, 200, 50, ${(1 - i/8) * 0.6})`;
+            ctx.lineWidth = size * 0.6;
+            ctx.beginPath();
+            ctx.moveTo(rocket.trail[i - 1].x, rocket.trail[i - 1].y);
+            ctx.lineTo(rocket.trail[i].x, rocket.trail[i].y);
+            ctx.stroke();
+          }
+        }
+      }
+      
+      // Vẽ thân tên lửa
+      ctx.save();
+      ctx.translate(rocket.x, rocket.y);
+      
+      // Rocket.angle sử dụng hệ tọa độ xe (0 = lên trên, tăng theo chiều kim đồng hồ)
+      // Cần xoay canvas để mũi tên lửa (vẽ hướng lên, y âm) chỉ đúng hướng bay
+      ctx.rotate(rocket.angle);
+      
+      // Bóng tên lửa (hiệu ứng 3D)
+      ctx.shadowColor = 'rgba(255, 68, 68, 0.5)';
+      ctx.shadowBlur = 10;
+      
+      // Thân tên lửa - gradient đỏ sang vàng (lớn hơn)
+      const gradient = ctx.createLinearGradient(0, -15, 0, 15);
+      gradient.addColorStop(0, '#ff4444');
+      gradient.addColorStop(0.5, '#ff6b35');
+      gradient.addColorStop(1, '#ffaa00');
+      ctx.fillStyle = gradient;
+      
+      ctx.beginPath();
+      ctx.moveTo(0, -18);  // Đầu nhọn (to hơn)
+      ctx.lineTo(6, -9);
+      ctx.lineTo(6, 9);
+      ctx.lineTo(3, 15);
+      ctx.lineTo(-3, 15);
+      ctx.lineTo(-6, 9);
+      ctx.lineTo(-6, -9);
+      ctx.closePath();
+      ctx.fill();
+      
+      // Đường viền sáng
+      ctx.strokeStyle = '#ffdd00';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(0, -18);
+      ctx.lineTo(-4.5, -9);
+      ctx.stroke();
+      
+      // Lửa đuôi - hiệu ứng ngọn lửa (lớn hơn)
+      const flameSize = 12 + Math.random() * 9;
+      const flameGradient = ctx.createLinearGradient(0, 15, 0, 15 + flameSize);
+      flameGradient.addColorStop(0, 'rgba(255, 200, 50, 0.9)');
+      flameGradient.addColorStop(0.5, 'rgba(255, 107, 53, 0.7)');
+      flameGradient.addColorStop(1, 'rgba(255, 68, 68, 0)');
+      
+      ctx.fillStyle = flameGradient;
+      ctx.beginPath();
+      ctx.moveTo(-3, 15);
+      ctx.lineTo(0, 15 + flameSize);
+      ctx.lineTo(3, 15);
+      ctx.closePath();
+      ctx.fill();
+      
+      // Lửa đuôi thứ 2 (nhỏ hơn, lung linh)
+      ctx.fillStyle = 'rgba(255, 255, 100, 0.6)';
+      ctx.beginPath();
+      ctx.moveTo(-1.5, 15);
+      ctx.lineTo(0, 15 + flameSize * 0.7);
+      ctx.lineTo(1.5, 15);
+      ctx.closePath();
+      ctx.fill();
+      
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    }
+
     // Vẽ particles (hiệu ứng nổ)
     particles.forEach(p => {
       ctx.globalAlpha = p.alpha;
@@ -1510,45 +2013,47 @@ const BalloonCarGame = () => {
     
     } // Kết thúc phần vẽ xe cảnh sát
 
-    // Mũi kiếm nhọn không có shadow (áp dụng cho cả 2 loại xe)
-    const swordYStart = isTruck ? -vehicleHeight / 2 : -CAR_HEIGHT / 2;
-    const swordGradient = ctx.createLinearGradient(
-      0, swordYStart,
-      0, swordYStart - SWORD_LENGTH
-    );
-    swordGradient.addColorStop(0, '#dc2626');
-    swordGradient.addColorStop(0.5, '#ef4444');
-    swordGradient.addColorStop(1, '#f87171');
-    
-    ctx.strokeStyle = swordGradient;
-    ctx.lineWidth = isTruck ? 10 : 6;
-    ctx.lineCap = 'butt';
-    ctx.beginPath();
-    ctx.moveTo(0, swordYStart);
-    ctx.lineTo(0, swordYStart - SWORD_LENGTH + 8);
-    ctx.stroke();
+    // Mũi kiếm nhọn - chỉ vẽ nếu swordVisible = true
+    if (gameRef.current.swordVisible) {
+      const swordYStart = isTruck ? -vehicleHeight / 2 : -CAR_HEIGHT / 2;
+      const swordGradient = ctx.createLinearGradient(
+        0, swordYStart,
+        0, swordYStart - SWORD_LENGTH
+      );
+      swordGradient.addColorStop(0, '#dc2626');
+      swordGradient.addColorStop(0.5, '#ef4444');
+      swordGradient.addColorStop(1, '#f87171');
+      
+      ctx.strokeStyle = swordGradient;
+      ctx.lineWidth = isTruck ? 10 : 6;
+      ctx.lineCap = 'butt';
+      ctx.beginPath();
+      ctx.moveTo(0, swordYStart);
+      ctx.lineTo(0, swordYStart - SWORD_LENGTH + 8);
+      ctx.stroke();
 
-    // Lưỡi kiếm nhọn
-    ctx.fillStyle = '#ff0404e0';
-    ctx.strokeStyle = '#820909ff';
-    ctx.lineWidth = isTruck ? 3 : 2;
-    ctx.beginPath();
-    const bladeWidth = isTruck ? 10 : 6;
-    ctx.moveTo(0, swordYStart - SWORD_LENGTH);
-    ctx.lineTo(-bladeWidth, swordYStart - SWORD_LENGTH + 12);
-    ctx.lineTo(bladeWidth, swordYStart - SWORD_LENGTH + 12);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    
-    // Hiệu ứng phát sáng trên lưỡi kiếm
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-    ctx.beginPath();
-    ctx.moveTo(-1, -CAR_HEIGHT / 2 - SWORD_LENGTH + 2);
-    ctx.lineTo(-4, -CAR_HEIGHT / 2 - SWORD_LENGTH + 10);
-    ctx.lineTo(1, -CAR_HEIGHT / 2 - SWORD_LENGTH + 10);
-    ctx.closePath();
-    ctx.fill();
+      // Lưỡi kiếm nhọn
+      ctx.fillStyle = '#ff0404e0';
+      ctx.strokeStyle = '#820909ff';
+      ctx.lineWidth = isTruck ? 3 : 2;
+      ctx.beginPath();
+      const bladeWidth = isTruck ? 10 : 6;
+      ctx.moveTo(0, swordYStart - SWORD_LENGTH);
+      ctx.lineTo(-bladeWidth, swordYStart - SWORD_LENGTH + 12);
+      ctx.lineTo(bladeWidth, swordYStart - SWORD_LENGTH + 12);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      
+      // Hiệu ứng phát sáng trên lưỡi kiếm
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.beginPath();
+      ctx.moveTo(-1, -CAR_HEIGHT / 2 - SWORD_LENGTH + 2);
+      ctx.lineTo(-4, -CAR_HEIGHT / 2 - SWORD_LENGTH + 10);
+      ctx.lineTo(1, -CAR_HEIGHT / 2 - SWORD_LENGTH + 10);
+      ctx.closePath();
+      ctx.fill();
+    }
 
     // Hiển thị x2 nếu đã tăng tốc
     if (car.speedMultiplier === 2) {
@@ -1955,25 +2460,37 @@ const BalloonCarGame = () => {
             )}
           </div>
 
-          <div style={{display: 'flex', gap: '0.5rem'}}>
+          <div style={{display: 'flex', flexDirection: 'column', gap: '0.5rem'}}>
             <button
               onClick={startGame}
               className="btn btn-start"
               disabled={!isHost}
-              style={{flex: 1, opacity: isHost ? 1 : 0.5}}
+              style={{opacity: isHost ? 1 : 0.5}}
             >
               <Play size={24} />
               {isHost ? 'Bắt Đầu Chơi' : 'Chờ Host bắt đầu'}
             </button>
-            
-            {/* <button
-              onClick={backToMenu}
-              className="btn btn-gray"
-            disabled={true}>
-              <RotateCcw size={20} />
-              Quay lại
-            </button> */}
           </div>
+ {/* Checkbox cho chế độ bắn rocket liên tục */}
+            <label style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '0.5rem',
+              backgroundColor: 'rgba(255, 255, 255, 0.1)',
+              borderRadius: '8px',
+              cursor: 'pointer'
+            }}>
+              <input
+                type="checkbox"
+                checked={continuousRocketMode}
+                onChange={(e) => setContinuousRocketMode(e.target.checked)}
+                style={{width: '20px', height: '20px', cursor: 'pointer', marginTop: '5px'}}
+              />
+              <span style={{fontSize: '0.9rem'}}>
+                🚀 Chế độ bắn tên lửa (nhấn SPACE sau 5s)
+              </span>
+            </label>
 
           <div className="info-box">
             <p>🚗 <strong>Xe tự động chạy ngẫu nhiên</strong></p>

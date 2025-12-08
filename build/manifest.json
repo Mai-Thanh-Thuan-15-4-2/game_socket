@@ -1,0 +1,25 @@
+{
+  "short_name": "Balloon and Car",
+  "name": "Balloon and Car - Popping Game",
+  "icons": [
+    {
+      "src": "balloon-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "logo192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "logo512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#667eea",
+  "background_color": "#1a1a2e"
+}

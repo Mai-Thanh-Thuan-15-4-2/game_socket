@@ -1399,39 +1399,45 @@ const BalloonCarGame = () => {
     }
     
     // Cập nhật sparks (hạt lửa xẹt)
-    for (let i = gameRef.current.sparks.length - 1; i >= 0; i--) {
-      const spark = gameRef.current.sparks[i];
-      spark.x += spark.vx;
-      spark.y += spark.vy;
-      spark.vy += 0.2; // Trọng lực
-      spark.life -= 0.02;
-      spark.size *= 0.96;
-      
-      if (spark.life <= 0) {
-        gameRef.current.sparks.splice(i, 1);
+    if (gameRef.current.sparks && gameRef.current.sparks.length > 0) {
+      for (let i = gameRef.current.sparks.length - 1; i >= 0; i--) {
+        const spark = gameRef.current.sparks[i];
+        spark.x += spark.vx;
+        spark.y += spark.vy;
+        spark.vy += 0.2; // Trọng lực
+        spark.life -= 0.02;
+        spark.size *= 0.96;
+        
+        if (spark.life <= 0) {
+          gameRef.current.sparks.splice(i, 1);
+        }
       }
     }
     
     // Cập nhật damage texts (số -1 bay lên)
-    for (let i = gameRef.current.damageTexts.length - 1; i >= 0; i--) {
-      const dmg = gameRef.current.damageTexts[i];
-      dmg.x += dmg.vx;
-      dmg.y += dmg.vy;
-      dmg.vy -= 0.1; // Bay lên chậm dần
-      dmg.life -= 0.015;
-      dmg.size *= 0.98; // Thu nhỏ dần
-      
-      if (dmg.life <= 0) {
-        gameRef.current.damageTexts.splice(i, 1);
+    if (gameRef.current.damageTexts && gameRef.current.damageTexts.length > 0) {
+      for (let i = gameRef.current.damageTexts.length - 1; i >= 0; i--) {
+        const dmg = gameRef.current.damageTexts[i];
+        dmg.x += dmg.vx;
+        dmg.y += dmg.vy;
+        dmg.vy -= 0.1; // Bay lên chậm dần
+        dmg.life -= 0.015;
+        dmg.size *= 0.98; // Thu nhỏ dần
+        
+        if (dmg.life <= 0) {
+          gameRef.current.damageTexts.splice(i, 1);
+        }
       }
     }
     
     // Cập nhật quỹ đạo xe (giảm chậm hơn để đuôi lửa dài hơn)
     const trail = gameRef.current.carTrail;
-    for (let i = trail.length - 1; i >= 0; i--) {
-      trail[i].alpha -= 0.03;
-      if (trail[i].alpha <= 0) {
-        trail.splice(i, 1);
+    if (trail && trail.length > 0) {
+      for (let i = trail.length - 1; i >= 0; i--) {
+        trail[i].alpha -= 0.03;
+        if (trail[i].alpha <= 0) {
+          trail.splice(i, 1);
+        }
       }
     }
     

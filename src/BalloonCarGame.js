@@ -742,37 +742,44 @@ const BalloonCarGame = () => {
             const targetBalloon = aliveBalloons[Math.floor(Math.random() * aliveBalloons.length)];
             
             console.log(`🚀 UFO AUTO-LAUNCHING ROCKET at ${targetBalloon.name}!`);
+            
+            // DỪNG UFO trước khi bắn tên lửa
+            car.canMove = false;
+            car.speed = 0;
+            car.vx = 0;
+            car.vy = 0;
+            setIsCarMoving(false);
           
-          // Bắn tên lửa từ UFO
-          const launched = rocketSystem.current.launchRocket(
-            car,
-            targetBalloon,
-            null, // fakeTarget
-            aliveBalloons,
-            CAR_WIDTH,
-            CAR_HEIGHT,
-            SWORD_LENGTH
-          );
+            // Bắn tên lửa từ UFO
+            const launched = rocketSystem.current.launchRocket(
+              car,
+              targetBalloon,
+              null, // fakeTarget
+              aliveBalloons,
+              CAR_WIDTH,
+              CAR_HEIGHT,
+              SWORD_LENGTH
+            );
           
-          if (launched) {
-            rocketSystem.current.rocketLaunched = true;
+            if (launched) {
+              rocketSystem.current.rocketLaunched = true;
             
-            // Set cooldown 3 giây (180 frames)
-            gameRef.current.rocketCooldownTimer = 180;
-            setRocketCooldown(3);
+              // Set cooldown 3 giây (180 frames)
+              gameRef.current.rocketCooldownTimer = 180;
+              setRocketCooldown(3);
             
-            // Chuyển camera theo rocket
-            gameRef.current.cameraTarget = 'rocket';
+              // Chuyển camera theo rocket
+              gameRef.current.cameraTarget = 'rocket';
             
-            // Phát âm thanh rocket
-            if (rocketFlyAudioRef.current) {
-              rocketFlyAudioRef.current.currentTime = 0;
-              rocketFlyAudioRef.current.volume = 0.3;
-              rocketFlyAudioRef.current.play().catch(err => console.log('Rocket fly audio error:', err));
+              // Phát âm thanh rocket
+              if (rocketFlyAudioRef.current) {
+                rocketFlyAudioRef.current.currentTime = 0;
+                rocketFlyAudioRef.current.volume = 0.3;
+                rocketFlyAudioRef.current.play().catch(err => console.log('Rocket fly audio error:', err));
+              }
             }
           }
         }
-      }
       }
       
       // Cập nhật cooldown timer cho rocket

@@ -20,12 +20,13 @@ const BalloonCarGame = () => {
   const laserAudioRef = useRef(null); // Ref cho âm thanh tên lửa
   const rocketFlyAudioRef = useRef(null); // Ref cho âm thanh bay của rocket
   const [gameState, setGameState] = useState('setup'); // Bỏ qua menu, vào setup luôn
+  // eslint-disable-next-line no-unused-vars
   const [roomList, setRoomList] = useState([]);
   const [currentRoom, setCurrentRoom] = useState(null);
   const [isHost, setIsHost] = useState(true); // Offline nên luôn là host
   const [roomName, setRoomName] = useState('');
   const [username, setUsername] = useState('');
-  const [players, setPlayers] = useState(['Vietnam', 'Thailand', 'Indonesia']);
+  const [players, setPlayers] = useState(['DiuLt', 'ViNx', 'HaiTt']);
   const [newPlayer, setNewPlayer] = useState('');
   const [isMusicMuted, setIsMusicMuted] = useState(false); // Trạng thái tắt nhạc nền
   const [currentTurn, setCurrentTurn] = useState(0);
@@ -1623,6 +1624,7 @@ const BalloonCarGame = () => {
   };
   
   // Helper function to convert HSL to RGB
+  // eslint-disable-next-line no-unused-vars
   const hslToRgb = (h, s, l) => {
     let r, g, b;
     
@@ -2037,6 +2039,7 @@ const BalloonCarGame = () => {
     }
   };
 
+  // eslint-disable-next-line no-unused-vars
   const backToMenu = () => {
     if (socketRef.current && currentRoom) {
       socketRef.current.disconnect();

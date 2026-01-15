@@ -43,11 +43,10 @@ const BalloonCarGame = () => {
   const [ufoMode, setUfoMode] = useState(false); // Chế độ đĩa bay
 
   const randomNames = [
-    'Malaysia', 'Singapore', 'Philippines', 'Laos', 'Cambodia', 'Myanmar', 'Brunei',
-    'China', 'Japan', 'Korea', 'India', 'Pakistan',
-    'Bangladesh', 'SriLanka', 'Nepal', 'Bhutan', 'Maldives',
-    'Russia', 'USA', 'UK', 'France', 'Germany',
-    'Italy', 'Spain', 'Portugal', 'Brazil', 'Argentina', 'Australia', 'Canada', 'Mexico'
+    'DiuLt', 'ViNx', 'HaiTt', 'PhucDh', 'PhuongLk', 'KhanhTn', 'ThuyTtn',
+    'TheNt', 'LongTnh', 'VuLnh', 'DungPa', 'TuDq', 'TuyenNt', 'DungTt',
+    'QuangNt', 'ThuanMt', 'CuongNht', 'ManhLd', 'KhoaNha', 'HieuNv',
+    'ToanNd', 'SonTt', 'GiangHh', 'NamHpv', 'KietTa'
   ];
   
   const gameRef = useRef({
@@ -1957,7 +1956,7 @@ const BalloonCarGame = () => {
   };
 
   const addPlayer = () => {
-    if (newPlayer.trim() && players.length < 20) {
+    if (newPlayer.trim() && players.length < 30) {
       const name = newPlayer.trim().split(' ')[0]; // Chỉ lấy từ đầu tiên
       setPlayers([...players, name]);
       setNewPlayer('');
@@ -1965,7 +1964,7 @@ const BalloonCarGame = () => {
   };
 
   const addRandomPlayer = () => {
-    if (players.length >= 20) return;
+    if (players.length >= 30) return;
     
     const availableNames = randomNames.filter(name => !players.includes(name));
     if (availableNames.length === 0) {
@@ -1979,10 +1978,10 @@ const BalloonCarGame = () => {
 
   const addMaxPlayers = () => {
     const availableNames = randomNames.filter(name => !players.includes(name));
-    const numToAdd = Math.min(20 - players.length, availableNames.length);
+    const numToAdd = Math.min(30 - players.length, availableNames.length);
     
     if (numToAdd === 0) {
-      alert('Đã đủ 20 người chơi hoặc hết tên!');
+      alert('Đã đủ 30 người chơi hoặc hết tên!');
       return;
     }
     
@@ -2193,7 +2192,7 @@ const BalloonCarGame = () => {
               ))}
             </div>
 
-            {players.length < 20 && (
+            {players.length < 30 && (
               <div style={{display: 'flex', flexDirection: 'column', gap: '0.5rem'}}>
                 <div className="input-group">
                   <input
@@ -2224,7 +2223,7 @@ const BalloonCarGame = () => {
                     className="btn btn-orange"
                     style={{flex: 1}}
                   >
-                    🚀 Tối Đa (20)
+                    🚀 VTCODE
                   </button>
                 </div>
               </div>

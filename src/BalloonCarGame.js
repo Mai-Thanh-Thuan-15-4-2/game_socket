@@ -1978,18 +1978,16 @@ const BalloonCarGame = () => {
 
   const addMaxPlayers = () => {
     const availableNames = randomNames.filter(name => !players.includes(name));
-    const numToAdd = Math.min(30 - players.length, availableNames.length);
     
-    if (numToAdd === 0) {
-      alert('Đã đủ 30 người chơi hoặc hết tên!');
+    if (availableNames.length === 0) {
+      alert('Đã thêm hết tất cả các tên!');
       return;
     }
     
-    // Shuffle và lấy ngẫu nhiên
+    // Shuffle và thêm tất cả tên còn lại
     const shuffled = [...availableNames].sort(() => Math.random() - 0.5);
-    const newPlayers = shuffled.slice(0, numToAdd);
     
-    setPlayers([...players, ...newPlayers]);
+    setPlayers([...players, ...shuffled]);
   };
 
   const removePlayer = (index) => {
